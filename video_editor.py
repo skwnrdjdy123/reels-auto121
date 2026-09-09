@@ -70,41 +70,29 @@ def render_reels(
         "-i", input_video_path
     ]
 
-    # --- 비디오 필터 구성 ---
-    if is_vertical:
-        # 이미 세로 쇼츠인 경우: 자막과 헤더가 이미 영상 자체에 있으므로 가림 방지를 위해 추가 덧씌움 없이 원본 100% 보존
-        filters.append(f"[{base_video_tag}]null[v_out]")
+    cmd_inputs.extend(["-i", overlay_image_path])
+    if caption_items:
+        filters.append(f"[{base_video_tag}][1:v]overlay=0:0[v_hdr]")
+        last_tag = "v_hdr"
+        for idx, cap in enumerate(caption_items, start=2):
+            cmd_inputs.extend(["-i", cap['image_path']])
+            is_last = (idx == len(caption_items) + 1)
+            next_tag = "v_out" if is_last else f"v_cap{idx}"
+            s = cap.get('start', 0.0)
+            e = cap.get('end', 999.0)
+            filters.append(f"[{last_tag}][{idx}:v]overlay=0:0:enable='between(t,{s},{e})'[{next_tag}]")
+            last_tag = next_tag
     else:
-        cmd_inputs.extend(["-i", overlay_image_path])
-        if caption_items:
-            filters.append(f"[{base_video_tag}][1:v]overlay=0:0[v_hdr]")
-            last_tag = "v_hdr"
-            for idx, cap in enumerate(caption_items, start=2):
-                cmd_inputs.extend(["-i", cap['image_path']])
-                is_last = (idx == len(caption_items) + 1)
-                next_tag = "v_out" if is_last else f"v_cap{idx}"
-                s = cap.get('start', 0.0)
-                e = cap.get('end', 999.0)
-                filters.append(f"[{last_tag}][{idx}:v]overlay=0:0:enable='between(t,{s},{e})'[{next_tag}]")
-                last_tag = next_tag
-        else:
-            filters.append(f"[{base_video_tag}][1:v]overlay=0:0[v_out]")
-
-
+        filters.append(f"[{base_video_tag}][1:v]overlay=0:0[v_out]")
 
     # --- 오디오 효과음(SFX) 믹싱 구성 ---
     from config import SFX_DIR
-    audio_sfx_inputs = []
-    audio_filters = []
-    
-    # 원본 오디오를 44.1kHz 스테레오로 정규화
-    # 원본 오디오를 44.1kHz 스테레오로 정규화
     audio_filters = []
     current_input_idx = cmd_inputs.count("-i")
     sfx_count = 0
     sfx_mix_tags = []
 
-    if caption_items and not is_vertical:
+    if caption_items:
         for cap in caption_items:
             sfx_name = cap.get('sfx')
             if not sfx_name:
@@ -125,6 +113,8 @@ def render_reels(
                 sfx_mix_tags.append(f"[{sfx_tag}]")
                 current_input_idx += 1
                 sfx_count += 1
+
+
 
     if sfx_count > 0:
         audio_filters.insert(0, "[0:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,volume=1.0[a_base]")

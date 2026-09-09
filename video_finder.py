@@ -16,23 +16,26 @@ if sys.platform == "win32":
 
 PROCESSED_FILE = BASE_DIR / "processed_videos.json"
 
-# 1. 6000만 뷰 메가 랭킹 쇼츠 공식 채널 목록 (최우선 탐색)
+# 1. 자막 및 텍스트 없는 해외 순수 원본 밈/동물 바이럴 클립 채널 목록
 PRIORITY_CHANNELS = [
-    "https://www.youtube.com/channel/UC2oP74F0FiE1jWQPy31YUVw/shorts",  # 레퍼런스 랭킹 채널 (TOP 6 랭킹 쇼츠)
-    "https://www.youtube.com/@랭킹모음/shorts",
+    "https://www.youtube.com/@FailArmy/shorts",            # 해외 원본 웃긴 실수/해프닝 클립
+    "https://www.youtube.com/@ThePetCollective/shorts",    # 해외 원본 반려동물/동물 클립
+    "https://www.youtube.com/@PeopleAreAwesome/shorts",    # 해외 원본 신기한 모먼트
+    "https://www.youtube.com/@animalsdoingthings/shorts"   # 해외 원본 동물 행동 클립
 ]
 
-# 2. 대중적으로 조회수 폭발하는 메가 트렌드 밈 키워드
+# 2. 텍스트/자막 없는 순수 해외 원본 영상 검색 쿼리
 SEARCH_QUERIES = [
-    "역대급 랭킹 shorts",
-    "top 5 hilarious viral ranking shorts",
-    "try not to laugh hilarious shorts 1M views",
-    "funniest moments caught on camera viral shorts",
-    "best funny pet moments viral shorts",
-    "instant regret hilarious shorts",
-    "laugh challenge viral meme shorts",
-    "failarmy funniest shorts"
+    "funny animal moments original clip",
+    "hilarious pet reaction raw footage",
+    "instant regret caught on camera original",
+    "funny cat moments original video",
+    "unexpected dog reaction caught on tape",
+    "wholesome animal reaction raw clip",
+    "funniest moments caught on camera original",
+    "funny fails original video clip"
 ]
+
 
 REACTION_PHRASES = [
     "반응 진짜 킹받네 ㅋㅋㅋ 🤣",
@@ -237,8 +240,14 @@ def find_viral_video(min_views: int = 300000) -> dict:
                         continue
 
                     v_title = entry.get('title', '')
+                    
+                    # 이미 다른 한국 채널이 편집해 올린 2차 가공 영상(한국어 제목 포함)은 100% 제외
+                    korean_chars = sum(1 for c in v_title if '\uac00' <= c <= '\ud7a3')
+                    if korean_chars >= 2:
+                        continue
+
                     v_url = f"https://www.youtube.com/shorts/{v_id}"
-                    print(f"🔥 [레퍼런스 랭킹 대세 영상 발견!] {v_title} ({v_url})")
+                    print(f"🔥 [해외 순수 원본 바이럴 클립 발견!] {v_title} ({v_url})")
                     line1, line2, sub, caption = generate_korean_hook(v_title)
 
                     return {
@@ -255,6 +264,7 @@ def find_viral_video(min_views: int = 300000) -> dict:
             except Exception as e:
                 print(f"채널 탐색 일시 건너뜀: {e}")
                 continue
+
 
         # --- 2단계: 키워드 검색 탐색 ---
         random.shuffle(SEARCH_QUERIES)
@@ -278,10 +288,17 @@ def find_viral_video(min_views: int = 300000) -> dict:
                     continue
 
                 v_title = entry.get('title', '')
+                
+                # 이미 편집된 한국어 영상 제외 (순수 외국어 원본만 수집)
+                korean_chars = sum(1 for c in v_title if '\uac00' <= c <= '\ud7a3')
+                if korean_chars >= 2:
+                    continue
+
                 title_lower = v_title.lower()
 
                 if any(bad in title_lower for bad in ["live", "24/7", "stream", "broadcast", "compilation"]):
                     continue
+
 
                 v_duration = entry.get('duration')
                 if v_duration and (v_duration < 7 or v_duration > 50):
