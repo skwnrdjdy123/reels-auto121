@@ -146,17 +146,35 @@ def generate_human_scene_captions(title: str, duration: float = 20.0) -> list[di
             "다시 봐도 타이밍이 진짜 예술이다"
         ]
 
-    # 3단계 시간 구간 배분 및 상황별 최적 효과음(SFX) 매핑
-    t1 = round(max(3.0, duration * 0.33), 1)
-    t2 = round(max(t1 + 3.0, duration * 0.68), 1)
-    t3 = round(max(t2 + 3.0, duration), 1)
+    # 3단계 시간 구간 배분 및 유명 쇼츠 10종 효과음(SFX) 다채로운 매핑
+    t1 = round(max(2.5, duration * 0.32), 1)
+    t2 = round(max(t1 + 2.5, duration * 0.65), 1)
+    t3 = round(max(t2 + 2.5, duration), 1)
+
+    # 1단계 도입 효과음 풀: 빠른 전환 및 시선 집중
+    sfx1_candidates = ["whoosh", "camera", "pop"]
+    # 2단계 전개 효과음 풀: 재미있는 상황, 실수, 호기심
+    if any(k in title_lower for k in ["fail", "clumsy", "regret", "실수"]):
+        sfx2_candidates = ["bonk", "boing", "glitch"]
+    elif any(k in title_lower for k in ["cat", "dog", "pet", "동물"]):
+        sfx2_candidates = ["boing", "pop", "camera"]
+    else:
+        sfx2_candidates = ["pop", "boing", "bonk"]
+
+    # 3단계 결말/반전 효과음 풀: 레전드 펀치라인, 반전, 감탄
+    sfx3_candidates = ["ding", "scratch", "boom", "buzzer"]
+
+    sfx1 = random.choice(sfx1_candidates)
+    sfx2 = random.choice(sfx2_candidates)
+    sfx3 = random.choice(sfx3_candidates)
 
     captions = [
-        {"text": random.choice(step1_pool), "start": 0.0, "end": t1, "sfx": "whoosh"},
-        {"text": random.choice(step2_pool), "start": t1, "end": t2, "sfx": "pop"},
-        {"text": random.choice(step3_pool), "start": t2, "end": t3, "sfx": "ding"}
+        {"text": random.choice(step1_pool), "start": 0.0, "end": t1, "sfx": sfx1},
+        {"text": random.choice(step2_pool), "start": t1, "end": t2, "sfx": sfx2},
+        {"text": random.choice(step3_pool), "start": t2, "end": t3, "sfx": sfx3}
     ]
     return captions
+
 
 def generate_korean_hook(english_title: str) -> tuple[str, str, str, str]:
     """

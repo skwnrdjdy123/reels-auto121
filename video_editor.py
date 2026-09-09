@@ -102,15 +102,25 @@ def render_reels(
                 sfx_file = SFX_DIR / "pop.wav"
 
             if sfx_file.exists():
-                cmd_inputs.extend(["-i", str(sfx_file)])
-                delay_ms = int(cap.get('start', 0.0) * 1000)
-                sfx_tag = f"a_sfx_{sfx_count}"
-                # 영상 오디오에 묻히지 않도록 효과음 볼륨 부스트 (2.2 ~ 2.4배)
-                vol = 2.4 if sfx_name in ["whoosh", "pop"] else 2.0
+                # 효과음 종류별 최적 볼륨 매핑 (원음 가림 방지 및 선명한 펀치감)
+                sfx_vol_map = {
+                    "camera": 2.5,
+                    "whoosh": 2.4,
+                    "pop": 2.4,
+                    "bonk": 2.3,
+                    "ding": 2.4,
+                    "boing": 2.3,
+                    "scratch": 2.2,
+                    "buzzer": 2.2,
+                    "glitch": 2.2,
+                    "boom": 2.0,
+                }
+                vol = sfx_vol_map.get(sfx_name, 2.2)
                 audio_filters.append(
                     f"[{current_input_idx}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
                     f"adelay={delay_ms}|{delay_ms},volume={vol}[{sfx_tag}]"
                 )
+
                 sfx_mix_tags.append(f"[{sfx_tag}]")
                 current_input_idx += 1
                 sfx_count += 1
