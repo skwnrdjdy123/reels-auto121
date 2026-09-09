@@ -38,11 +38,14 @@ class ReelsApprovalView(discord.ui.View):
 
     @discord.ui.button(label="✅ 인스타 업로드 승인", style=discord.ButtonStyle.success)
     async def approve_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # 3초 타임아웃 방지를 위해 즉시 디스코드에 '처리 중' 신호 전송
+        await interaction.response.defer()
+
         for child in self.children:
             child.disabled = True
         save_processed_id(self.video_id)
         
-        await interaction.response.edit_message(
+        await interaction.message.edit(
             content=f"🚀 **[승인 완료]** 인스타그램 계정으로 릴스 업로드를 진행하고 있습니다...\n잠시만 기다려 주세요! (약 15초 소요)",
             view=self
         )
@@ -61,63 +64,72 @@ class ReelsApprovalView(discord.ui.View):
                 f"👉 **{res['url']}**"
             )
         except Exception as e:
-            await self.channel.send(f"⚠️ 인스타그램 업로드 중 오류 발생: `{str(e)}`\n(인스타그램 아이디/비밀번호 설정을 확인해 주세요)")
+            await self.channel.send(f"⚠️ 인스타그램 업로드 중 오류 발생: `{str(e)}`\n(인스타그램 설정을 확인해 주세요)")
 
     @discord.ui.button(label="❌ 반려 / 다른 영상 찾기", style=discord.ButtonStyle.danger)
     async def reject_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
         for child in self.children:
             child.disabled = True
         save_processed_id(self.video_id)
-        await interaction.response.edit_message(
+        await interaction.message.edit(
             content=f"🗑️ **[반려 완료]** `{self.reels_filename}` 영상이 반려되었습니다. 다음 영상을 탐색합니다!",
             view=self
         )
-        # 반려 시 자동으로 다음 영상 탐색 실행
         await process_auto_reels(self.channel)
 
 async def process_auto_reels(channel: discord.TextChannel):
     """
     해외 바이럴 영상을 자동으로 찾아 릴스로 편집 후 디스코드 채널로 전송
+    (비공개/삭제된 영상은 자동으로 건너뛰고 재시도)
     """
     status_msg = await channel.send("🔍 **실시간 해외 바이럴 인기 영상을 탐색하고 있습니다...**")
-    try:
-        loop = asyncio.get_event_loop()
-        found = await loop.run_in_executor(None, find_viral_video)
+    loop = asyncio.get_event_loop()
 
-        await status_msg.edit(
-            content=f"🎯 **바이럴 영상 발견!**\n- 원본: `{found['orig_title']}`\n- 상단 후킹 제목: **{found['top_title']}**\n- 하단 문구: **{found['bottom_text']}**\n\n⚙️ 9:16 릴스로 자동 편집 중입니다... (약 15~20초)"
-        )
+    for attempt in range(5):
+        try:
+            found = await loop.run_in_executor(None, find_viral_video)
 
-        reels_path = await loop.run_in_executor(
-            None,
-            lambda: create_reels_pipeline(
-                video_url=found['url'],
-                line1_text=found.get('line1', '역대급 해외 바이럴'),
-                line2_text=found.get('line2', '웃긴 모먼트 TOP5'),
-                sub_text=found.get('sub', '(다들 몇 번이 제일 웃김? ㅋㅋㅋ)'),
-                bottom_caption=found.get('caption', '아니 이건 진짜 레전드네 ㅋㅋㅋ 🤣')
+            await status_msg.edit(
+                content=f"🎯 **대세 바이럴 영상 발견!**\n- 제목: **{found['orig_title']}**\n- 상단 헤더: **{found['line1']} {found['line2']}**\n- 자막: **{found['caption']}**\n\n⚙️ 9:16 랭킹 릴스로 자동 편집 중입니다... (약 15초)"
             )
-        )
 
-        filename = Path(reels_path).name
-        file_size_mb = os.path.getsize(reels_path) / (1024 * 1024)
+            reels_path = await loop.run_in_executor(
+                None,
+                lambda: create_reels_pipeline(
+                    video_url=found['url'],
+                    line1_text=found.get('line1', '역대급 해외 바이럴'),
+                    line2_text=found.get('line2', '웃긴 모먼트 TOP5'),
+                    sub_text=found.get('sub', '(다들 몇 번이 제일 웃김? ㅋㅋㅋ)'),
+                    bottom_caption=found.get('caption', '아니 이건 진짜 레전드네 ㅋㅋㅋ 🤣')
+                )
+            )
 
-        if file_size_mb > 25:
-            await status_msg.edit(content=f"⚠️ 영상 크기가 너무 큽니다 ({file_size_mb:.1f}MB). 다른 영상을 탐색해 주세요.")
-            return
+            filename = Path(reels_path).name
+            file_size_mb = os.path.getsize(reels_path) / (1024 * 1024)
 
-        view = ReelsApprovalView(reels_filename=filename, video_id=found['id'], channel=channel)
-        discord_file = discord.File(reels_path, filename=filename)
+            if file_size_mb > 25:
+                save_processed_id(found['id'])
+                continue
 
-        await channel.send(
-            content=f"🔔 **새로운 릴스가 완성되었습니다!**\n🔗 원본 링크: {found['url']}\n영상을 확인하시고 업로드 여부를 결정해 주세요:",
-            file=discord_file,
-            view=view
-        )
-        await status_msg.delete()
+            view = ReelsApprovalView(reels_filename=filename, video_id=found['id'], channel=channel)
+            discord_file = discord.File(reels_path, filename=filename)
 
-    except Exception as e:
-        await status_msg.edit(content=f"⚠️ 자동 탐색 및 제작 중 오류 발생: `{str(e)}`")
+            await channel.send(
+                content=f"🔔 **새로운 릴스가 완성되었습니다!**\n🔗 원본 링크: {found['url']}\n영상을 확인하시고 업로드 여부를 결정해 주세요:",
+                file=discord_file,
+                view=view
+            )
+            await status_msg.delete()
+            return # 성공 시 종료!
+
+        except Exception as e:
+            err_text = str(e)
+            print(f"재시도 {attempt+1}/5 - 영상 오류 ({err_text[:80]}), 다음 영상 자동 탐색...")
+            await status_msg.edit(content=f"🔄 다른 인기 영상을 탐색 중입니다... (시도 {attempt+1}/5)")
+            await asyncio.sleep(1)
+
+    await status_msg.edit(content="⚠️ 인기 영상을 다운로드하는 중 일시적인 오류가 발생했습니다. 잠시 후 `!탐색`을 다시 시도해 주세요.")
 
 # 무인 자동 업로드 모드 플래그 (True면 승인 버튼 없이 인스타로 바로 직행)
 AUTO_DIRECT_UPLOAD = False
