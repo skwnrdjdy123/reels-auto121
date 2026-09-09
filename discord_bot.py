@@ -53,7 +53,7 @@ class ReelsApprovalView(discord.ui.View):
             loop = asyncio.get_event_loop()
             res = await loop.run_in_executor(
                 None,
-                lambda: upload_reels_to_instagram(reels_path)
+                lambda: upload_reels_to_instagram(reels_path, title="역대급 해외 바이럴 웃긴 영상")
             )
             await self.channel.send(
                 f"🎉 **인스타그램 릴스 업로드 성공!**\n"
