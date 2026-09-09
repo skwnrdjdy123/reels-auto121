@@ -21,7 +21,8 @@ if not DISCORD_BOT_TOKEN and os.path.exists(BASE_DIR / "discord_token.txt"):
 
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
+
 
 # 자동 발행 알림을 보낼 디스코드 채널 ID 저장
 TARGET_CHANNEL_ID = None
