@@ -16,17 +16,22 @@ if sys.platform == "win32":
 
 PROCESSED_FILE = BASE_DIR / "processed_videos.json"
 
-# 대중적으로 조회수 폭발하는 메가 트렌드 밈 키워드
+# 1. 6000만 뷰 메가 랭킹 쇼츠 공식 채널 목록 (최우선 탐색)
+PRIORITY_CHANNELS = [
+    "https://www.youtube.com/channel/UC2oP74F0FiE1jWQPy31YUVw/shorts",  # 레퍼런스 랭킹 채널 (TOP 6 랭킹 쇼츠)
+    "https://www.youtube.com/@랭킹모음/shorts",
+]
+
+# 2. 대중적으로 조회수 폭발하는 메가 트렌드 밈 키워드
 SEARCH_QUERIES = [
+    "역대급 랭킹 shorts",
+    "top 5 hilarious viral ranking shorts",
     "try not to laugh hilarious shorts 1M views",
     "funniest moments caught on camera viral shorts",
     "best funny pet moments viral shorts",
     "instant regret hilarious shorts",
-    "people being dumb funny shorts 1M",
-    "unexpected wholesome and funny viral shorts",
     "laugh challenge viral meme shorts",
-    "failarmy funniest shorts",
-    "viralhog hilarious shorts"
+    "failarmy funniest shorts"
 ]
 
 REACTION_PHRASES = [
@@ -152,47 +157,60 @@ def generate_human_scene_captions(title: str, duration: float = 20.0) -> list[di
 
 def generate_korean_hook(english_title: str) -> tuple[str, str, str, str]:
     """
-    영문 제목을 번역하고 한국 인스타 릴스에 맞게 담백하고 흥미로운 타이틀을 생성합니다.
+    레퍼런스 영상과 100% 일치하는 '역대급 [주제] 모먼트 랭킹 TOP N' 포맷으로 타이틀을 생성합니다.
     """
     clean_title = english_title.split('#')[0].strip()
     clean_title = clean_title.replace('|', '').replace('~', '').strip()
-    if not clean_title or len(clean_title) < 3:
-        clean_title = "눈길을 사로잡는 영상"
 
     # 번역
     try:
         translator = GoogleTranslator(source='auto', target='ko')
         translated = translator.translate(clean_title)
-        if len(translated) > 22:
-            translated = translated[:22] + "..."
     except Exception:
-        translated = clean_title[:20]
+        translated = clean_title
 
-    line1_options = [
-        "해외에서 화제 된",
-        "다시 봐도 여운 남는",
-        "외국인들 눈물 흘린",
-        "보는 내내 미소 짓는",
-        "실시간으로 주목받는"
-    ]
-    line1_text = random.choice(line1_options)
-    line2_text = f"{translated}" if len(translated) > 3 else "역대급 순간"
-    sub_text = random.choice([
-        "(마음이 절로 몽글몽글해짐)",
-        "(끝까지 보게 되는 순간)",
-        "(몇 번을 다시 돌려보게 되네)",
-        "(진짜 사람 사는 냄새 난다)"
-    ])
-    bottom_caption = "보는 내내 마음이 훈훈해지는 순간"
+    # 주제어 추출 및 정돈
+    import re
+    # TOP N 숫자 추출
+    top_num_match = re.search(r'(?:TOP|Top)\s*(\d+)', clean_title)
+    top_num = f"TOP{top_num_match.group(1)}" if top_num_match else "TOP 5"
+
+    title_lower = clean_title.lower()
+    if any(k in title_lower for k in ["cat", "kitten", "고양이"]):
+        line1_text = "역대급 웃긴 고양이"
+        line2_text = f"모먼트 랭킹 {top_num}"
+    elif any(k in title_lower for k in ["dog", "puppy", "강아지", "개"]):
+        line1_text = "역대급 웃긴 강아지"
+        line2_text = f"모먼트 랭킹 {top_num}"
+    elif any(k in title_lower for k in ["pet", "animal", "동물"]):
+        line1_text = "역대급 귀여운 동물"
+        line2_text = f"모먼트 랭킹 {top_num}"
+    elif any(k in title_lower for k in ["snowball", "fight"]):
+        line1_text = "역대급 웃긴 눈싸움"
+        line2_text = f"모먼트 랭킹 {top_num}"
+    elif any(k in title_lower for k in ["baby", "kid", "child", "아기", "아이"]):
+        line1_text = "역대급 사랑스러운 아이들"
+        line2_text = f"모먼트 랭킹 {top_num}"
+    elif any(k in title_lower for k in ["prank", "장난", "몰카"]):
+        line1_text = "역대급 꿀잼 몰카"
+        line2_text = f"모먼트 랭킹 {top_num}"
+    else:
+        line1_text = "역대급 해외 바이럴"
+        # 12자 이내로 축약
+        short_topic = translated.replace("TOP", "").replace("Top", "").strip()[:10]
+        line2_text = f"{short_topic} 랭킹 {top_num}"
+
+    sub_text = "(다들 몇 번이 제일 웃김? ㅋㅋㅋ)"
+    bottom_caption = "이건 진짜 예상 못 했다 ㅋㅋㅋ"
 
     return line1_text, line2_text, sub_text, bottom_caption
 
 def find_viral_video(min_views: int = 300000) -> dict:
     """
-    조회수 30만~수백만 이상 터진 '검증된 대중적 메가 트렌드 쇼츠'만 엄선하여 탐색합니다.
+    1. 레퍼런스 공식 랭킹 채널(6000만 뷰 메가 랭킹 쇼츠) 최우선 탐색
+    2. 수백만~수천만 이상 터진 '대세 랭킹 및 바이럴 쇼츠' 엄선
     """
     processed_ids = load_processed_ids()
-    random.shuffle(SEARCH_QUERIES)
 
     ydl_opts = {
         'extract_flat': True,
@@ -201,17 +219,53 @@ def find_viral_video(min_views: int = 300000) -> dict:
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        # --- 1단계: 레퍼런스 채널 (TOP 랭킹 쇼츠 원본) 최우선 탐색 ---
+        for chan_url in PRIORITY_CHANNELS:
+            print(f"🌟 [레퍼런스 랭킹 채널 탐색] {chan_url}")
+            try:
+                chan_result = ydl.extract_info(chan_url, download=False)
+                entries = chan_result.get('entries', []) if chan_result else []
+                # 조회수 높은 순서 정렬
+                entries.sort(key=lambda x: x.get('view_count') or 0, reverse=True)
+
+                for entry in entries:
+                    v_id = entry.get('id')
+                    if not v_id or v_id in processed_ids:
+                        continue
+                    import re
+                    if not re.match(r'^[a-zA-Z0-9_-]{11}$', str(v_id)):
+                        continue
+
+                    v_title = entry.get('title', '')
+                    v_url = f"https://www.youtube.com/shorts/{v_id}"
+                    print(f"🔥 [레퍼런스 랭킹 대세 영상 발견!] {v_title} ({v_url})")
+                    line1, line2, sub, caption = generate_korean_hook(v_title)
+
+                    return {
+                        'id': v_id,
+                        'url': v_url,
+                        'orig_title': v_title,
+                        'line1': line1,
+                        'line2': line2,
+                        'sub': sub,
+                        'caption': caption,
+                        'top_title': f"{line1} {line2}",
+                        'bottom_text': caption
+                    }
+            except Exception as e:
+                print(f"채널 탐색 일시 건너뜀: {e}")
+                continue
+
+        # --- 2단계: 키워드 검색 탐색 ---
+        random.shuffle(SEARCH_QUERIES)
         for query in SEARCH_QUERIES:
             print(f"🔍 메가 바이럴 트렌드 탐색 중... (키워드: {query})")
             try:
-                # 상위 25개 검색 결과 분석
                 search_result = ydl.extract_info(f"ytsearch25:{query}", download=False)
             except Exception:
                 continue
 
             entries = search_result.get('entries', []) if search_result else []
-
-            # 1. 조회수 높은 순서로 정렬 (조회수 없는 건 뒤로)
             entries.sort(key=lambda x: x.get('view_count') or 0, reverse=True)
 
             for entry in entries:
@@ -219,7 +273,6 @@ def find_viral_video(min_views: int = 300000) -> dict:
                 if not v_id or v_id in processed_ids:
                     continue
 
-                # 유튜브 비디오 ID는 정확히 11자의 영문, 숫자, -, _ 로만 이루어져야 함
                 import re
                 if not re.match(r'^[a-zA-Z0-9_-]{11}$', str(v_id)):
                     continue
@@ -227,11 +280,9 @@ def find_viral_video(min_views: int = 300000) -> dict:
                 v_title = entry.get('title', '')
                 title_lower = v_title.lower()
 
-                # 1. 라이브 방송, 24시간 스트리밍, 컴필레이션 제외
                 if any(bad in title_lower for bad in ["live", "24/7", "stream", "broadcast", "compilation"]):
                     continue
 
-                # 2. 재생시간 필터 (8초 ~ 45초 사이의 임팩트 있는 단일 숏폼만)
                 v_duration = entry.get('duration')
                 if v_duration and (v_duration < 7 or v_duration > 50):
                     continue

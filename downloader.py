@@ -3,10 +3,10 @@ import uuid
 import yt_dlp
 from config import TEMP_DIR
 
-def download_video(video_url: str, max_duration: int = 15) -> dict:
+def download_video(video_url: str, max_duration: int = None) -> dict:
     """
     yt-dlp를 사용하여 주어진 URL(YouTube Shorts, TikTok, Reddit, Instagram 등)의 비디오를 다운로드합니다.
-    max_duration이 지정된 경우 앞부분 N초만 잘라서 다운로드합니다.
+    max_duration이 지정된 경우에만 앞부분 N초를 자르고, 기본값은 쇼츠 전체를 온전히 다운로드합니다.
     """
     unique_id = uuid.uuid4().hex[:8]
     output_template = str(TEMP_DIR / f"raw_{unique_id}.%(ext)s")

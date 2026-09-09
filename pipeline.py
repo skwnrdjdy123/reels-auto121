@@ -42,11 +42,11 @@ def create_reels_pipeline(
     # 효과음 에셋 확인 및 자동 생성
     ensure_sfx_assets()
 
-    # 1. 비디오 다운로드 (최대 30초)
+    # 1. 비디오 다운로드 (전체 쇼츠 완결본 다운로드)
     print("\n[1/3] 비디오 다운로드 중...")
-    video_info = download_video(video_url, max_duration=30)
+    video_info = download_video(video_url, max_duration=None)
     raw_video_path = video_info['file_path']
-    duration = video_info.get('duration') or 20.0
+    duration = video_info.get('duration') or 25.0
     print(f"✓ 원본 다운로드 완료: {video_info['title']} (길이: {duration}초)")
 
     # 2. 상단 고정 헤더 배너 생성
