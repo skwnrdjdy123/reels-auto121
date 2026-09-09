@@ -19,8 +19,20 @@ def create_reels_pipeline(
     line1_text: str = "역대급 해외 바이럴",
     line2_text: str = "웃긴 모먼트 TOP5",
     sub_text: str = "(다들 몇 번이 제일 웃김? ㅋㅋㅋ)",
-    bottom_caption: str = "아니 이건 진짜 레전드네 ㅋㅋㅋ 🤣"
+    bottom_caption: str = "아니 이건 진짜 레전드네 ㅋㅋㅋ 🤣",
+    top_title: str = None,
+    bottom_text: str = None,
+    **kwargs
 ) -> str:
+    """
+    유튜브 랭킹 숏폼 스타일(상단 핑크+화이트 볼드 헤더 + 괄호 유도 + 하단 블랙박스 자막) 릴스 제작 파이프라인
+    """
+    # top_title이 넘어온 경우 처리
+    if top_title and not line1_text:
+        line1_text = "역대급 해외 바이럴"
+        line2_text = top_title
+    if bottom_text and not bottom_caption:
+        bottom_caption = bottom_text
     """
     유튜브 랭킹 숏폼 스타일(상단 핑크+화이트 볼드 헤더 + 괄호 유도 + 하단 블랙박스 자막) 릴스 제작 파이프라인
     """
