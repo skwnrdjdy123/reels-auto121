@@ -170,12 +170,17 @@ class ReelsApprovalView(discord.ui.View):
         await process_auto_reels(self.channel)
 
 
-async def process_auto_reels(channel: discord.TextChannel):
+async def process_auto_reels(channel: discord.TextChannel, interaction: discord.Interaction = None):
     """
     해외 바이럴 영상을 자동으로 찾아 릴스로 편집 후 디스코드 채널로 전송
-    (비공개/삭제된 영상은 자동으로 건너뛰고 재시도)
+    (비공개/오류 영상은 내부적으로 자동 건너뛰고 오직 100% 성공한 영상만 단 1개 전송)
     """
-    status_msg = await channel.send("🔍 **실시간 해외 바이럴 인기 영상을 탐색하고 있습니다...**")
+    init_text = "🔍 **실시간 해외 바이럴 인기 영상을 탐색하고 있습니다...**"
+    if interaction:
+        status_msg = await interaction.followup.send(init_text)
+    else:
+        status_msg = await channel.send(init_text)
+
     loop = asyncio.get_event_loop()
 
     for attempt in range(5):
@@ -184,7 +189,7 @@ async def process_auto_reels(channel: discord.TextChannel):
             found = await loop.run_in_executor(None, find_viral_video)
 
             await status_msg.edit(
-                content=f"🎯 **인기 영상 발견!** (시도 {attempt+1})\n- 원제: **{found['orig_title']}**\n- 타이틀: **{found['line1']} {found['line2']}**\n\n⚙️ 9:16 인스타 릴스 및 장면별 공감 자막 제작 중... (약 15초)"
+                content=f"⚙️ **[영상 발견]** `{found['line1']} {found['line2']}`\n인스타그램 릴스 최적화 및 상황별 효과음 믹싱 중... (약 15초)"
             )
 
             reels_path = await loop.run_in_executor(
@@ -204,7 +209,6 @@ async def process_auto_reels(channel: discord.TextChannel):
                 print(f"영상 용량({file_size_mb:.1f}MB)이 디스코드 제한(10MB)을 초과하여 다음 영상으로 자동 전환합니다.")
                 save_processed_id(found['id'])
                 continue
-
 
             LAST_PROCESSED_VIDEO[channel.id] = {
                 'url': found['url'],
@@ -232,21 +236,24 @@ async def process_auto_reels(channel: discord.TextChannel):
                 view=view
             )
 
-            await status_msg.delete()
+            try:
+                await status_msg.delete()
+            except Exception:
+                pass
             return # 성공 시 종료!
 
         except Exception as e:
             err_text = str(e)
             if found and 'id' in found:
                 save_processed_id(found['id'])
-            print(f"재시도 {attempt+1}/5 - 영상 오류 ({err_text[:80]}), 다음 영상 자동 탐색...")
-            await status_msg.edit(content=f"🔄 오류 영상 자동 건너뜀 및 다음 인기 영상 탐색 중... (시도 {attempt+1}/5)")
+            print(f"[자동 스킵] 영상 오류 ({err_text[:80]}), 무음 다음 영상 자동 탐색 중...")
             await asyncio.sleep(1)
 
-    await status_msg.edit(content="⚠️ 인기 영상을 다운로드하는 중 일시적인 오류가 발생했습니다. 잠시 후 `!탐색`을 다시 시도해 주세요.")
+    await status_msg.edit(content="⚠️ 인기 영상을 다운로드하는 중 일시적인 오류가 발생했습니다. 잠시 후 `/탐색`을 다시 시도해 주세요.")
 
 # 무인 자동 업로드 모드 플래그 (True면 승인 버튼 없이 인스타로 바로 직행)
 AUTO_DIRECT_UPLOAD = False
+
 
 @tasks.loop(minutes=120)
 async def auto_schedule_task():
@@ -356,8 +363,9 @@ async def on_ready():
 async def slash_find(interaction: discord.Interaction):
     global TARGET_CHANNEL_ID
     TARGET_CHANNEL_ID = interaction.channel.id
-    await interaction.response.send_message("🔍 **실시간 인기 영상을 탐색하여 릴스 제작을 시작합니다...**")
-    await process_auto_reels(interaction.channel)
+    await interaction.response.defer()
+    await process_auto_reels(interaction.channel, interaction=interaction)
+
 
 @bot.tree.command(name="수정", description="특정 영상 또는 최근 영상을 원하는 제목과 문구로 다시 제작합니다.")
 @app_commands.describe(

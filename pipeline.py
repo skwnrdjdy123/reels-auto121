@@ -5,8 +5,8 @@ from pathlib import Path
 
 if sys.platform == "win32":
     try:
-        sys.stdout.reconfigure(encoding="utf-8")
-        sys.stderr.reconfigure(encoding="utf-8")
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     except Exception:
         pass
 
@@ -34,20 +34,22 @@ def create_reels_pipeline(
         line1_text = "해외에서 화제 된"
         line2_text = top_title
 
-    print(f"\n==========================================")
-    print(f"🎬 인스타 최적화 릴스 제작 시작!")
-    print(f"🔗 영상 URL: {video_url}")
-    print(f"==========================================")
+    print(f"\n==========================================", flush=True)
+    print(f"🎬 인스타 최적화 릴스 제작 시작!", flush=True)
+    print(f"🔗 영상 URL: {video_url}", flush=True)
+    print(f"==========================================", flush=True)
 
     # 효과음 에셋 확인 및 자동 생성
     ensure_sfx_assets()
 
     # 1. 비디오 다운로드 (전체 쇼츠 완결본 다운로드)
-    print("\n[1/3] 비디오 다운로드 중...")
+    print("\n[1/3] 비디오 다운로드 중...", flush=True)
     video_info = download_video(video_url, max_duration=None)
     raw_video_path = video_info['file_path']
     duration = video_info.get('duration') or 25.0
-    print(f"✓ 원본 다운로드 완료: {video_info['title']} (길이: {duration}초)")
+    safe_title = video_info.get('title', '').encode('cp949', 'replace').decode('cp949')
+    print(f"[SUCCESS] 원본 다운로드 완료: {safe_title} (길이: {duration}초)", flush=True)
+
 
     # 2. 상단 고정 헤더 배너 생성
     print(f"\n[2/3] 상단 고정 헤더 및 장면별 인간미 자막 생성 중...")
