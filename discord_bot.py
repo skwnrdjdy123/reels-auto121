@@ -27,6 +27,8 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 TARGET_CHANNEL_ID = None
 AUTO_INTERVAL_MINUTES = 60 # 기본 60분 간격
 
+from instagram_uploader import upload_reels_to_instagram
+
 class ReelsApprovalView(discord.ui.View):
     def __init__(self, reels_filename: str, video_id: str, channel: discord.TextChannel):
         super().__init__(timeout=None)
@@ -39,10 +41,27 @@ class ReelsApprovalView(discord.ui.View):
         for child in self.children:
             child.disabled = True
         save_processed_id(self.video_id)
+        
         await interaction.response.edit_message(
-            content=f"🎉 **[승인 완료]** `{self.reels_filename}` 릴스 업로드가 승인되었습니다!\n(다음 단계에서 연결될 인스타그램 계정으로 즉시 자동 발행됩니다)",
+            content=f"🚀 **[승인 완료]** 인스타그램 계정으로 릴스 업로드를 진행하고 있습니다...\n잠시만 기다려 주세요! (약 15초 소요)",
             view=self
         )
+
+        # 인스타그램 업로드 실행
+        reels_path = str(OUTPUT_DIR / self.reels_filename)
+        try:
+            loop = asyncio.get_event_loop()
+            res = await loop.run_in_executor(
+                None,
+                lambda: upload_reels_to_instagram(reels_path)
+            )
+            await self.channel.send(
+                f"🎉 **인스타그램 릴스 업로드 성공!**\n"
+                f"지금 바로 인스타에서 확인해 보세요:\n"
+                f"👉 **{res['url']}**"
+            )
+        except Exception as e:
+            await self.channel.send(f"⚠️ 인스타그램 업로드 중 오류 발생: `{str(e)}`\n(인스타그램 아이디/비밀번호 설정을 확인해 주세요)")
 
     @discord.ui.button(label="❌ 반려 / 다른 영상 찾기", style=discord.ButtonStyle.danger)
     async def reject_button(self, interaction: discord.Interaction, button: discord.ui.Button):

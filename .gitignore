@@ -6,3 +6,5 @@ __pycache__/
 .env
 *.txt
 !requirements.txt
+instagram_account.json
+ig_session.json
