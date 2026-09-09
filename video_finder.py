@@ -160,10 +160,13 @@ def generate_human_scene_captions(title: str, duration: float = 20.0) -> list[di
 
 def generate_korean_hook(english_title: str) -> tuple[str, str, str, str]:
     """
-    레퍼런스 영상과 100% 일치하는 '역대급 [주제] 모먼트 랭킹 TOP N' 포맷으로 타이틀을 생성합니다.
+    영상 내용에 맞춤형 훅 타이틀을 생성합니다:
+    - 실제로 여러 장면이 들어있는 모음집/컴필레이션인 경우: '역대급 [주제] / 모먼트 랭킹 TOP N'
+    - 단일 해프닝/클립 영상인 경우: '역대급 화제 된 [주제] / 실제 반응 레전드 모먼트 / (결말 보고 빵 터짐 ㅋㅋㅋ)'
     """
     clean_title = english_title.split('#')[0].strip()
     clean_title = clean_title.replace('|', '').replace('~', '').strip()
+    title_lower = clean_title.lower()
 
     # 번역
     try:
@@ -172,41 +175,56 @@ def generate_korean_hook(english_title: str) -> tuple[str, str, str, str]:
     except Exception:
         translated = clean_title
 
-    # 주제어 추출 및 정돈
+    # 1. 실제 다중 장면 랭킹/모음집 영상인지 확인 (TOP N 또는 compilation 키워드)
     import re
-    # TOP N 숫자 추출
-    top_num_match = re.search(r'(?:TOP|Top)\s*(\d+)', clean_title)
-    top_num = f"TOP{top_num_match.group(1)}" if top_num_match else "TOP 5"
+    top_num_match = re.search(r'(?:top|ranking)\s*(\d+)', title_lower)
+    is_compilation = bool(top_num_match) or any(w in title_lower for w in ["compilation", "fails compilation", "top 5", "top 6", "top 10", "ranking", "moments compilation"])
 
-    title_lower = clean_title.lower()
+    # 2. 주제어 식별
     if any(k in title_lower for k in ["cat", "kitten", "고양이"]):
-        line1_text = "역대급 웃긴 고양이"
-        line2_text = f"모먼트 랭킹 {top_num}"
+        topic = "웃긴 고양이"
     elif any(k in title_lower for k in ["dog", "puppy", "강아지", "개"]):
-        line1_text = "역대급 웃긴 강아지"
-        line2_text = f"모먼트 랭킹 {top_num}"
+        topic = "웃긴 강아지"
     elif any(k in title_lower for k in ["pet", "animal", "동물"]):
-        line1_text = "역대급 귀여운 동물"
-        line2_text = f"모먼트 랭킹 {top_num}"
-    elif any(k in title_lower for k in ["snowball", "fight"]):
-        line1_text = "역대급 웃긴 눈싸움"
-        line2_text = f"모먼트 랭킹 {top_num}"
+        topic = "귀여운 동물"
     elif any(k in title_lower for k in ["baby", "kid", "child", "아기", "아이"]):
-        line1_text = "역대급 사랑스러운 아이들"
-        line2_text = f"모먼트 랭킹 {top_num}"
+        topic = "귀여운 아이들"
     elif any(k in title_lower for k in ["prank", "장난", "몰카"]):
-        line1_text = "역대급 꿀잼 몰카"
-        line2_text = f"모먼트 랭킹 {top_num}"
+        topic = "꿀잼 장난"
+    elif any(k in title_lower for k in ["fail", "regret", "clumsy", "실수"]):
+        topic = "순간포착 레전드"
     else:
-        line1_text = "역대급 해외 바이럴"
-        # 12자 이내로 축약
-        short_topic = translated.replace("TOP", "").replace("Top", "").strip()[:10]
-        line2_text = f"{short_topic} 랭킹 {top_num}"
+        topic = "해외 바이럴"
 
-    sub_text = "(다들 몇 번이 제일 웃김? ㅋㅋㅋ)"
+    # 3. 모음집 vs 단일 클립 분기 처리 (사기 및 괴리감 방지!)
+    if is_compilation:
+        top_num = f"TOP{top_num_match.group(1)}" if top_num_match else "TOP 5"
+        line1_text = f"역대급 {topic}"
+        line2_text = f"모먼트 랭킹 {top_num}"
+        sub_text = "(다들 몇 번이 제일 웃김? ㅋㅋㅋ)"
+    else:
+        # 단일 클립 영상인 경우: 랭킹 TOP5를 붙이지 않고 단일 상황에 100% 맞는 고몰입 훅 사용
+        line1_text = f"역대급 화제 된 {topic}"
+        punchlines = [
+            "실제 반응 레전드 모먼트",
+            "보고도 안 믿기는 실제 상황",
+            "웃겨서 난리 난 반응 순간",
+            "끝까지 보게 만드는 장면",
+            "외국인들 댓글 폭발한 순간"
+        ]
+        line2_text = random.choice(punchlines)
+        sub_quotes = [
+            "(결말 보고 현실 웃음 터짐 ㅋㅋㅋ)",
+            "(마지막 표정이 진짜 킬포 ㅋㅋㅋ)",
+            "(끝까지 보면 이유가 나옴 ㅋㅋㅋ)",
+            "(표정 하나로 상황 정리 ㅋㅋㅋ)",
+            "(보고만 있어도 힐링 됨 ㅋㅋㅋ)"
+        ]
+        sub_text = random.choice(sub_quotes)
+
     bottom_caption = "이건 진짜 예상 못 했다 ㅋㅋㅋ"
-
     return line1_text, line2_text, sub_text, bottom_caption
+
 
 def find_viral_video(min_views: int = 300000) -> dict:
     """

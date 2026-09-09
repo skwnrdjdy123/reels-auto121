@@ -17,38 +17,40 @@ def ensure_sfx_assets():
     SFX_DIR.mkdir(exist_ok=True)
     sr = 44100
 
-    # 1. whoosh.wav
+    # 1. whoosh.wav (시선 집중 슉! 바람 스윕 사운드 - 펀치감 강화)
     f_whoosh = SFX_DIR / 'whoosh.wav'
-    if not f_whoosh.exists():
-        t_w = np.linspace(0, 0.25, int(sr * 0.25), endpoint=False)
-        noise = np.random.uniform(-1, 1, len(t_w))
-        freq_sweep = np.sin(2 * np.pi * (200 + 600 * (t_w / 0.25)**2) * t_w)
-        env_w = np.sin(np.pi * t_w / 0.25) ** 2
-        whoosh = (0.6 * noise + 0.4 * freq_sweep) * env_w
-        save_wav(f_whoosh, whoosh)
+    t_w = np.linspace(0, 0.3, int(sr * 0.3), endpoint=False)
+    noise = np.random.uniform(-0.8, 0.8, len(t_w))
+    freq_sweep = np.sin(2 * np.pi * (150 + 900 * (t_w / 0.3)**2) * t_w)
+    env_w = (np.sin(np.pi * t_w / 0.3) ** 2) * 1.5
+    whoosh = (0.5 * noise + 0.7 * freq_sweep) * env_w
+    save_wav(f_whoosh, whoosh)
 
-    # 2. pop.wav
+    # 2. pop.wav (경쾌하고 쨍한 퐁! 버블 팝 사운드 - 고주파 강조)
     f_pop = SFX_DIR / 'pop.wav'
-    if not f_pop.exists():
-        t_p = np.linspace(0, 0.12, int(sr * 0.12), endpoint=False)
-        freq_p = 450 + 600 * np.exp(-t_p * 40)
-        pop = np.sin(2 * np.pi * freq_p * t_p) * np.exp(-t_p * 35)
-        save_wav(f_pop, pop)
+    t_p = np.linspace(0, 0.15, int(sr * 0.15), endpoint=False)
+    freq_p = 350 + 850 * np.exp(-t_p * 35)
+    harmonics = np.sin(2 * np.pi * freq_p * t_p) * 0.8 + np.sin(2 * np.pi * (freq_p * 2) * t_p) * 0.3
+    pop = harmonics * np.exp(-t_p * 28) * 1.6
+    save_wav(f_pop, pop)
 
-    # 3. ding.wav
+    # 3. ding.wav (맑고 선명하게 울리는 띵! 차임벨 사운드)
     f_ding = SFX_DIR / 'ding.wav'
-    if not f_ding.exists():
-        t_d = np.linspace(0, 0.5, int(sr * 0.5), endpoint=False)
-        ding = (np.sin(2 * np.pi * 1760 * t_d) * 0.7 + np.sin(2 * np.pi * 3520 * t_d) * 0.3) * np.exp(-t_d * 8)
-        save_wav(f_ding, ding)
+    t_d = np.linspace(0, 0.6, int(sr * 0.6), endpoint=False)
+    bell = (
+        np.sin(2 * np.pi * 2093 * t_d) * 0.6 +   # C7
+        np.sin(2 * np.pi * 4186 * t_d) * 0.35 +  # C8
+        np.sin(2 * np.pi * 1046 * t_d) * 0.2     # C6
+    ) * np.exp(-t_d * 6.5) * 1.5
+    save_wav(f_ding, bell)
 
-    # 4. boom.wav
+    # 4. boom.wav (묵직한 임팩트 쿵! 붐 사운드)
     f_boom = SFX_DIR / 'boom.wav'
-    if not f_boom.exists():
-        t_b = np.linspace(0, 0.6, int(sr * 0.6), endpoint=False)
-        freq_b = 90 * np.exp(-t_b * 6) + 35
-        boom = (np.sin(2 * np.pi * freq_b * t_b) * 0.8 + np.random.uniform(-0.2, 0.2, len(t_b))) * np.exp(-t_b * 5)
-        save_wav(f_boom, boom)
+    t_b = np.linspace(0, 0.6, int(sr * 0.6), endpoint=False)
+    sub_bass = np.sin(2 * np.pi * (120 * np.exp(-t_b * 7) + 40) * t_b)
+    boom = (sub_bass * 0.9 + np.random.uniform(-0.15, 0.15, len(t_b))) * np.exp(-t_b * 4.5) * 1.4
+    save_wav(f_boom, boom)
+
 
 if __name__ == '__main__':
     ensure_sfx_assets()

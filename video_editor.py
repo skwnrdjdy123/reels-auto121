@@ -105,7 +105,8 @@ def render_reels(
                 cmd_inputs.extend(["-i", str(sfx_file)])
                 delay_ms = int(cap.get('start', 0.0) * 1000)
                 sfx_tag = f"a_sfx_{sfx_count}"
-                vol = 0.85 if sfx_name in ["whoosh", "pop"] else 0.75
+                # 영상 오디오에 묻히지 않도록 효과음 볼륨 부스트 (2.2 ~ 2.4배)
+                vol = 2.4 if sfx_name in ["whoosh", "pop"] else 2.0
                 audio_filters.append(
                     f"[{current_input_idx}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
                     f"adelay={delay_ms}|{delay_ms},volume={vol}[{sfx_tag}]"
@@ -114,15 +115,15 @@ def render_reels(
                 current_input_idx += 1
                 sfx_count += 1
 
-
-
     if sfx_count > 0:
-        audio_filters.insert(0, "[0:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,volume=1.0[a_base]")
+        # 원본 오디오를 0.75로 정돈하여 효과음이 선명하게 튀어나오도록 밸런싱
+        audio_filters.insert(0, "[0:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,volume=0.75[a_base]")
         inputs_str = "[a_base]" + "".join(sfx_mix_tags)
-        audio_filters.append(f"{inputs_str}amix=inputs={sfx_count+1}:duration=first:dropout_transition=0,volume=1.6[a_out]")
+        audio_filters.append(f"{inputs_str}amix=inputs={sfx_count+1}:duration=first:dropout_transition=0,volume=1.4[a_out]")
         map_audio = "[a_out]"
     else:
         map_audio = "0:a?"
+
 
 
     all_filters = filters + audio_filters
