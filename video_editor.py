@@ -102,6 +102,9 @@ def render_reels(
                 sfx_file = SFX_DIR / "pop.wav"
 
             if sfx_file.exists():
+                cmd_inputs.extend(["-i", str(sfx_file)])
+                sfx_tag = f"a_sfx_{sfx_count}"
+                delay_ms = int(cap.get('start', 0.0) * 1000)
                 # 효과음 종류별 최적 볼륨 매핑 (원음 가림 방지 및 선명한 펀치감)
                 sfx_vol_map = {
                     "camera": 2.5,

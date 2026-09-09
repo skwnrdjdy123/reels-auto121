@@ -283,6 +283,21 @@ def find_viral_video(min_views: int = 300000) -> dict:
                         continue
 
                     v_url = f"https://www.youtube.com/shorts/{v_id}"
+                    
+                    # 실제로 다운로드 가능한 유효 영상인지 사전 검증 (오류 영상 탐색 원천 제외)
+                    try:
+                        v_info = ydl.extract_info(v_url, download=False)
+                        if not v_info:
+                            continue
+                        v_dur = v_info.get('duration') or 0
+                        if v_dur < 5 or v_dur > 60:
+                            save_processed_id(v_id)
+                            continue
+                    except Exception as err:
+                        print(f"다운로드 불가 영상 사전 제외 ({v_id}): {err}")
+                        save_processed_id(v_id)
+                        continue
+
                     print(f"🔥 [해외 순수 원본 바이럴 클립 발견!] {v_title} ({v_url})")
                     line1, line2, sub, caption = generate_korean_hook(v_title)
 
@@ -341,6 +356,21 @@ def find_viral_video(min_views: int = 300000) -> dict:
                     continue
 
                 v_url = f"https://www.youtube.com/shorts/{v_id}"
+
+                # 실제로 다운로드 가능한 유효 영상인지 사전 검증 (오류 영상 탐색 원천 제외)
+                try:
+                    v_info = ydl.extract_info(v_url, download=False)
+                    if not v_info:
+                        continue
+                    v_dur = v_info.get('duration') or 0
+                    if v_dur < 5 or v_dur > 60:
+                        save_processed_id(v_id)
+                        continue
+                except Exception as err:
+                    print(f"다운로드 불가 영상 사전 제외 ({v_id}): {err}")
+                    save_processed_id(v_id)
+                    continue
+
                 print(f"🎯 검증된 대세 밈 영상 발견! | ID: {v_id} | 제목: {v_title}")
                 line1, line2, sub, caption = generate_korean_hook(v_title)
 

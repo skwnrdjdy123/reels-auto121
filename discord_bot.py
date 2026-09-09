@@ -173,11 +173,23 @@ class ReelsApprovalView(discord.ui.View):
 async def process_auto_reels(channel: discord.TextChannel, interaction: discord.Interaction = None):
     """
     해외 바이럴 영상을 자동으로 찾아 릴스로 편집 후 디스코드 채널로 전송
-    (비공개/오류 영상은 내부적으로 자동 건너뛰고 오직 100% 성공한 영상만 단 1개 전송)
+    (비공개/오류 영상은 내부적으로 자동 건너뛰고 오직 100% 검증된 성공 영상만 단 1개 전송)
     """
     init_text = "🔍 **실시간 해외 바이럴 인기 영상을 탐색하고 있습니다...**"
+    status_msg = None
+
+    async def update_status(text: str):
+        try:
+            if interaction:
+                await interaction.edit_original_response(content=text)
+            elif status_msg:
+                await status_msg.edit(content=text)
+        except Exception:
+            pass
+
     if interaction:
-        status_msg = await interaction.followup.send(init_text)
+        # 슬래시 커맨드 인터랙션: 이미 defer 완료되었으므로 original_response를 수정하여 단 1개의 메시지만 유지
+        await interaction.edit_original_response(content=init_text)
     else:
         status_msg = await channel.send(init_text)
 
@@ -188,8 +200,8 @@ async def process_auto_reels(channel: discord.TextChannel, interaction: discord.
         try:
             found = await loop.run_in_executor(None, find_viral_video)
 
-            await status_msg.edit(
-                content=f"⚙️ **[영상 발견]** `{found['line1']} {found['line2']}`\n인스타그램 릴스 최적화 및 상황별 효과음 믹싱 중... (약 15초)"
+            await update_status(
+                f"⚙️ **[영상 발견]** `{found['line1']} {found['line2']}`\n인스타그램 릴스 최적화 및 상황별 효과음 믹싱 중... (약 15초)"
             )
 
             reels_path = await loop.run_in_executor(
@@ -230,26 +242,44 @@ async def process_auto_reels(channel: discord.TextChannel, interaction: discord.
             )
             discord_file = discord.File(reels_path, filename=filename)
 
-            await channel.send(
-                content=f"🔔 **새로운 릴스가 완성되었습니다!**\n🔗 원본 링크: {found['url']}\n영상을 확인하시고 업로드 여부를 결정해 주세요 (수정이 필요하면 **[✏️ 자막/제목 직접 수정]** 버튼 클릭!):",
-                file=discord_file,
-                view=view
+            complete_content = (
+                f"🔔 **새로운 릴스가 완성되었습니다!**\n"
+                f"🔗 원본 링크: {found['url']}\n"
+                f"영상을 확인하시고 업로드 여부를 결정해 주세요 (수정이 필요하면 **[✏️ 자막/제목 직접 수정]** 버튼 클릭!):"
             )
 
-            try:
-                await status_msg.delete()
-            except Exception:
-                pass
-            return # 성공 시 종료!
+            if interaction:
+                # 단 1개의 디스코드 메시지에서 완성 영상 + 승인/수정/반려 버튼으로 완성! (중복 메시지 0개)
+                await interaction.edit_original_response(
+                    content=complete_content,
+                    attachments=[discord_file],
+                    view=view
+                )
+            else:
+                await channel.send(
+                    content=complete_content,
+                    file=discord_file,
+                    view=view
+                )
+                try:
+                    if status_msg:
+                        await status_msg.delete()
+                except Exception:
+                    pass
+
+            return # 성공 시 단 1개의 완성 영상만 남기고 종료!
 
         except Exception as e:
             err_text = str(e)
             if found and 'id' in found:
                 save_processed_id(found['id'])
-            print(f"[자동 스킵] 영상 오류 ({err_text[:80]}), 무음 다음 영상 자동 탐색 중...")
+            print(f"[자동 스킵] 영상 처리 예외 ({err_text[:80]}), 다음 영상 조용히 자동 탐색...")
+            # 채팅창에 지저분한 시도 3/5 에러를 도배하지 않고 차분한 탐색 상태 유지
+            await update_status("🔍 **최적의 바이럴 영상을 분석하여 릴스로 제작하고 있습니다... ⏳**")
             await asyncio.sleep(1)
 
-    await status_msg.edit(content="⚠️ 인기 영상을 다운로드하는 중 일시적인 오류가 발생했습니다. 잠시 후 `/탐색`을 다시 시도해 주세요.")
+    fail_msg = "⚠️ 인기 영상을 다운로드하는 중 일시적인 오류가 발생했습니다. 잠시 후 `/탐색`을 다시 시도해 주세요."
+    await update_status(fail_msg)
 
 # 무인 자동 업로드 모드 플래그 (True면 승인 버튼 없이 인스타로 바로 직행)
 AUTO_DIRECT_UPLOAD = False
@@ -388,8 +418,8 @@ async def slash_edit(interaction: discord.Interaction, 제목: str, 유튜브링
             line2 = last_info.get('line2', line2)
             sub = last_info.get('sub', sub)
         else:
-            await interaction.followup.send(
-                "⚠️ 최근 작업한 영상이 없습니다. `유튜브링크` 옵션에 영상 URL을 함께 입력해 주세요!"
+            await interaction.edit_original_response(
+                content="⚠️ 최근 작업한 영상이 없습니다. `유튜브링크` 옵션에 영상 URL을 함께 입력해 주세요!"
             )
             return
 
@@ -401,13 +431,15 @@ async def slash_edit(interaction: discord.Interaction, 제목: str, 유튜브링
     elif len(parts) == 1:
         line2 = parts[0]
 
-    status_msg = await interaction.followup.send(
-        f"🛠️ **[릴스 재제작 시작]** 영상을 요청하신 설정으로 다시 편집하고 있습니다...\n"
-        f"- 대상 영상: {target_url}\n"
-        f"- 1줄 타이틀: `{line1}`\n"
-        f"- 2줄 타이틀: `{line2}`\n"
-        f"- 서브 훅: `{sub}`\n"
-        f"⏳ 약 15초 소요됩니다."
+    await interaction.edit_original_response(
+        content=(
+            f"🛠️ **[릴스 재제작 시작]** 영상을 요청하신 설정으로 다시 편집하고 있습니다...\n"
+            f"- 대상 영상: {target_url}\n"
+            f"- 1줄 타이틀: `{line1}`\n"
+            f"- 2줄 타이틀: `{line2}`\n"
+            f"- 서브 훅: `{sub}`\n"
+            f"⏳ 약 15초 소요됩니다."
+        )
     )
 
     try:
@@ -444,13 +476,13 @@ async def slash_edit(interaction: discord.Interaction, 제목: str, 유튜브링
         )
         discord_file = discord.File(reels_path, filename=filename)
 
-        await interaction.channel.send(
+        await interaction.edit_original_response(
             content=f"✨ **수정된 릴스가 완성되었습니다!**\n🔗 원본 링크: {target_url}\n마음에 드시면 **[✅ 인스타 업로드 승인]**을 눌러주세요:",
-            file=discord_file,
+            attachments=[discord_file],
             view=view
         )
     except Exception as e:
-        await interaction.channel.send(f"⚠️ 영상 재제작 중 오류 발생: `{str(e)}`")
+        await interaction.edit_original_response(content=f"⚠️ 영상 재제작 중 오류 발생: `{str(e)}`")
 
 @bot.tree.command(name="자동켜기", description="지정한 시간(분)마다 자동으로 영상을 찾아 릴스로 편집 후 배달합니다.")
 @app_commands.describe(간격_분="탐색 주기(분 단위, 기본: 60분)")
