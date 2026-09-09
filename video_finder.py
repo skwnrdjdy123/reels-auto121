@@ -54,15 +54,110 @@ def save_processed_id(video_id: str):
     with open(PROCESSED_FILE, "w", encoding="utf-8") as f:
         json.dump(list(processed), f, ensure_ascii=False, indent=2)
 
+def generate_human_scene_captions(title: str, duration: float = 20.0) -> list[dict]:
+    """
+    억지웃음("ㅋㅋㅋ 🤣", "레전드 ㄷㄷ") 없이,
+    사람이 영상을 보면서 실제로 자연스럽게 공감하고 관찰하는 인간미 넘치는 장면별 3단계 자막을 생성합니다.
+    """
+    title_lower = title.lower()
+
+    if any(k in title_lower for k in ["dog", "cat", "pet", "puppy", "kitten", "animal", "고양이", "강아지", "동물"]):
+        step1_pool = [
+            "처음엔 그냥 지나가는 줄 알았는데",
+            "멀리서부터 눈 마주치더니 멈칫함",
+            "살금살금 다가오는 발걸음 봐",
+            "시작부터 이미 장난기 가득한 눈빛"
+        ]
+        step2_pool = [
+            "눈치 살살 보면서 각 재는 중",
+            "자세 잡는 게 진짜 진심이다",
+            "자신만만했던 표정이 점점 진지해짐",
+            "저 눈빛은 이미 마음 정한 눈빛인데"
+        ]
+        step3_pool = [
+            "보고만 있어도 마음이 편안해진다",
+            "하루 피로가 그냥 싹 녹아내림",
+            "이건 몇 번을 다시 봐도 힐링이다",
+            "오늘 본 영상 중에 제일 따뜻함"
+        ]
+    elif any(k in title_lower for k in ["kid", "baby", "child", "toddler", "heartwarming", "wholesome", "아이", "아기"]):
+        step1_pool = [
+            "처음엔 무슨 일인가 싶었는데",
+            "멀리서 서로 알아보고 멈칫함",
+            "달려오는 발걸음부터 신남이 가득함",
+            "마주치는 순간부터 이미 감동"
+        ]
+        step2_pool = [
+            "서로 꼭 껴안는 거 보고 울컥할 뻔",
+            "표정에 순수함이 그대로 묻어남",
+            "세상에 둘밖에 없는 것 같은 순간",
+            "바라보는 눈빛이 너무 다정하다"
+        ]
+        step3_pool = [
+            "진짜 보고 있는 내내 미소가 안 떠남",
+            "이런 게 진짜 사람 사는 맛이지",
+            "마음 따뜻해지는 최고의 명장면",
+            "오늘 하루도 힘내야겠다는 생각이 듬"
+        ]
+    elif any(k in title_lower for k in ["fail", "regret", "clumsy", "caught", "funny", "laugh", "실수", "순간"]):
+        step1_pool = [
+            "시작할 때만 해도 분위기 엄청 좋았음",
+            "자세 잡을 때부터 뭔가 심상치 않더라",
+            "주변 사람들까지 슬슬 긴장하는 중",
+            "이때까진 아무도 몰랐겠지"
+        ]
+        step2_pool = [
+            "서서히 일어나는 변화에 숨죽이게 됨",
+            "순간 타이밍 놓칠까 봐 조마조마함",
+            "점점 걷잡을 수 없이 흘러가는 상황",
+            "표정 하나하나가 너무 생생하다"
+        ]
+        step3_pool = [
+            "이건 생각지도 못한 타이밍이었다",
+            "마지막 반전이 진짜 깊은 여운을 남김",
+            "몇 번을 돌려봐도 순간을 못 잊겠네",
+            "오늘 하루 중 제일 집중해서 본 듯"
+        ]
+    else:
+        step1_pool = [
+            "처음엔 아무 생각 없이 보다가",
+            "눈길을 확 사로잡는 첫인상",
+            "뭔가 심상치 않은 조짐이 보임",
+            "시작부터 묘하게 빠져들게 됨"
+        ]
+        step2_pool = [
+            "점점 분위기에 깊게 몰입하게 됨",
+            "디테일 하나하나가 눈에 들어오기 시작",
+            "생각보다 훨씬 진지한 상황",
+            "여기서부터 숨죽이고 보게 됨"
+        ]
+        step3_pool = [
+            "끝까지 보길 정말 잘했다는 생각",
+            "여운이 꽤 오래 남는 명장면",
+            "주변 사람들에게도 꼭 보여주고 싶어짐",
+            "다시 봐도 타이밍이 진짜 예술이다"
+        ]
+
+    # 3단계 시간 구간 배분
+    t1 = round(max(3.0, duration * 0.33), 1)
+    t2 = round(max(t1 + 3.0, duration * 0.68), 1)
+    t3 = round(max(t2 + 3.0, duration), 1)
+
+    captions = [
+        {"text": random.choice(step1_pool), "start": 0.0, "end": t1},
+        {"text": random.choice(step2_pool), "start": t1, "end": t2},
+        {"text": random.choice(step3_pool), "start": t2, "end": t3}
+    ]
+    return captions
+
 def generate_korean_hook(english_title: str) -> tuple[str, str, str, str]:
     """
-    영문 제목을 번역하고 한국 인스타 릴스에 맞게 랭킹 후킹 타이틀을 생성합니다.
+    영문 제목을 번역하고 한국 인스타 릴스에 맞게 담백하고 흥미로운 타이틀을 생성합니다.
     """
-    # 해시태그 제거 및 정리
     clean_title = english_title.split('#')[0].strip()
     clean_title = clean_title.replace('|', '').replace('~', '').strip()
     if not clean_title or len(clean_title) < 3:
-        clean_title = "재밌는 영상"
+        clean_title = "눈길을 사로잡는 영상"
 
     # 번역
     try:
@@ -73,23 +168,22 @@ def generate_korean_hook(english_title: str) -> tuple[str, str, str, str]:
     except Exception:
         translated = clean_title[:20]
 
-    # 랭킹 스타일 문구 분리
     line1_options = [
-        "역대급 웃긴 순간",
-        "역대급 해외 바이럴",
-        "역대급 레전드 모먼트",
-        "실시간 떡상 중인",
-        "해외에서 난리 난"
+        "해외에서 화제 된",
+        "다시 봐도 여운 남는",
+        "외국인들 눈물 흘린",
+        "보는 내내 미소 짓는",
+        "실시간으로 주목받는"
     ]
     line1_text = random.choice(line1_options)
-    line2_text = f"{translated} 모먼트" if len(translated) > 3 else "모먼트 랭킹 TOP5"
+    line2_text = f"{translated}" if len(translated) > 3 else "역대급 순간"
     sub_text = random.choice([
-        "(다들 몇 번이 제일 웃김? ㅋㅋㅋ)",
-        "(마지막 결말 실화냐고 ㅋㅋㅋ)",
-        "(웃참 실패하면 팔로우 ㅋㅋㅋ)",
-        "(댓글 반응 폭발함 ㅋㅋㅋ)"
+        "(마음이 절로 몽글몽글해짐)",
+        "(끝까지 보게 되는 순간)",
+        "(몇 번을 다시 돌려보게 되네)",
+        "(진짜 사람 사는 냄새 난다)"
     ])
-    bottom_caption = random.choice(REACTION_PHRASES)
+    bottom_caption = "보는 내내 마음이 훈훈해지는 순간"
 
     return line1_text, line2_text, sub_text, bottom_caption
 

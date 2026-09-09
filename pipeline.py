@@ -11,33 +11,30 @@ if sys.platform == "win32":
         pass
 
 from downloader import download_video
-from banner_maker import create_top_ranking_header, create_bottom_caption
+from banner_maker import create_top_ranking_header, create_caption_overlay
 from video_editor import render_reels
+from video_finder import generate_human_scene_captions
+from config import TEMP_DIR
 
 def create_reels_pipeline(
     video_url: str,
-    line1_text: str = "역대급 해외 바이럴",
-    line2_text: str = "웃긴 모먼트 TOP5",
-    sub_text: str = "(다들 몇 번이 제일 웃김? ㅋㅋㅋ)",
-    bottom_caption: str = "아니 이건 진짜 레전드네 ㅋㅋㅋ 🤣",
+    line1_text: str = "해외에서 화제 된",
+    line2_text: str = "눈길을 사로잡는 순간",
+    sub_text: str = "(끝까지 보게 되는 장면)",
+    bottom_caption: str = None,
     top_title: str = None,
     bottom_text: str = None,
     **kwargs
 ) -> str:
     """
-    유튜브 랭킹 숏폼 스타일(상단 핑크+화이트 볼드 헤더 + 괄호 유도 + 하단 블랙박스 자막) 릴스 제작 파이프라인
+    유튜브 랭킹 숏폼 스타일 및 장면별 전환되는 인간미 자막 릴스 제작 파이프라인
     """
-    # top_title이 넘어온 경우 처리
     if top_title and not line1_text:
-        line1_text = "역대급 해외 바이럴"
+        line1_text = "해외에서 화제 된"
         line2_text = top_title
-    if bottom_text and not bottom_caption:
-        bottom_caption = bottom_text
-    """
-    유튜브 랭킹 숏폼 스타일(상단 핑크+화이트 볼드 헤더 + 괄호 유도 + 하단 블랙박스 자막) 릴스 제작 파이프라인
-    """
+
     print(f"\n==========================================")
-    print(f"🎬 랭킹 스타일 릴스 제작 시작!")
+    print(f"🎬 인스타 최적화 릴스 제작 시작!")
     print(f"🔗 영상 URL: {video_url}")
     print(f"==========================================")
 
@@ -45,32 +42,45 @@ def create_reels_pipeline(
     print("\n[1/3] 비디오 다운로드 중...")
     video_info = download_video(video_url, max_duration=30)
     raw_video_path = video_info['file_path']
-    print(f"✓ 원본 다운로드 완료: {video_info['title']}")
+    duration = video_info.get('duration') or 20.0
+    print(f"✓ 원본 다운로드 완료: {video_info['title']} (길이: {duration}초)")
 
-    # 2. 텍스트 배너 이미지 생성
-    print(f"\n[2/3] 상단 고정 헤더 및 자막 생성 중...")
+    # 2. 상단 고정 헤더 배너 생성
+    print(f"\n[2/3] 상단 고정 헤더 및 장면별 인간미 자막 생성 중...")
     print(f"   - 1줄: {line1_text}")
     print(f"   - 2줄: {line2_text}")
     print(f"   - 서브: {sub_text}")
-    print(f"   - 자막: {bottom_caption}")
 
-    overlay_path = create_top_ranking_header(
+    header_overlay_path = create_top_ranking_header(
         line1_text=line1_text,
         line2_text=line2_text,
         sub_text=sub_text
     )
-    if bottom_caption:
-        create_bottom_caption(bottom_caption, overlay_path)
 
-    # 3. FFmpeg 릴스 렌더링
-    print("\n[3/3] FFmpeg 랭킹 레이아웃 렌더링 중...")
+    # 3. 억지웃음 없는 장면별 공감형 자막(3단계) 생성
+    scene_captions = generate_human_scene_captions(title=video_info['title'], duration=duration)
+    caption_items = []
+    for idx, sc in enumerate(scene_captions):
+        cap_img_path = str(TEMP_DIR / f"caption_{video_info['id']}_{idx}.png")
+        create_caption_overlay(sc['text'], cap_img_path)
+        caption_items.append({
+            'image_path': cap_img_path,
+            'start': sc['start'],
+            'end': sc['end'],
+            'text': sc['text']
+        })
+        print(f"   - 장면 {idx+1} ({sc['start']}s ~ {sc['end']}s): \"{sc['text']}\"")
+
+    # 4. FFmpeg 릴스 렌더링
+    print("\n[3/3] FFmpeg 다중 장면 자막 릴스 렌더링 중...")
     output_path = render_reels(
         input_video_path=raw_video_path,
-        overlay_image_path=overlay_path,
+        overlay_image_path=header_overlay_path,
+        caption_items=caption_items,
         output_filename=f"ranking_reels_{video_info['id']}.mp4"
     )
 
-    print(f"\n🎉 랭킹 릴스 제작 완료!")
+    print(f"\n🎉 릴스 제작 완료!")
     print(f"📁 완성 파일: {output_path}")
     print(f"==========================================\n")
     return output_path

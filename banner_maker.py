@@ -98,7 +98,43 @@ def create_bottom_caption(
     img.save(base_img_path, "PNG")
     return base_img_path
 
+def create_caption_overlay(
+    caption_text: str,
+    output_path: str,
+    font_path: str = DEFAULT_FONT_PATH,
+    y_pos: int = 1370
+) -> str:
+    """
+    장면별 전환을 위한 투명 1080x1920 캔버스 위의 독립형 자막 PNG를 생성합니다.
+    """
+    img = Image.new("RGBA", (TARGET_WIDTH, TARGET_HEIGHT), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    try:
+        font = ImageFont.truetype(font_path, 46)
+    except Exception:
+        font = ImageFont.load_default()
+
+    if caption_text:
+        bbox = draw.textbbox((0, 0), caption_text, font=font)
+        text_w = bbox[2] - bbox[0]
+        text_h = bbox[3] - bbox[1]
+
+        pad_x = 36
+        pad_y = 16
+        box_x1 = max(60, (TARGET_WIDTH - text_w) // 2 - pad_x)
+        box_x2 = min(TARGET_WIDTH - 60, (TARGET_WIDTH + text_w) // 2 + pad_x)
+        box_y1 = y_pos - pad_y
+        box_y2 = y_pos + text_h + pad_y
+
+        draw.rounded_rectangle([(box_x1, box_y1), (box_x2, box_y2)], radius=18, fill=(0, 0, 0, 230))
+        text_x = (TARGET_WIDTH - text_w) // 2
+        draw.text((text_x, y_pos), caption_text, font=font, fill=(255, 255, 255, 255))
+
+    img.save(output_path, "PNG")
+    return output_path
+
 if __name__ == "__main__":
     out = create_top_ranking_header()
-    create_bottom_caption("야@무지게 물어버리네;; ㅋㅋㅋ", out)
+    create_bottom_caption("이때까지만 해도 아무 일 없을 줄 알았음", out)
     print("쇼츠 랭킹 스타일 오버레이 생성 완료:", out)

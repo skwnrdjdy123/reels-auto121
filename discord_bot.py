@@ -92,17 +92,16 @@ async def process_auto_reels(channel: discord.TextChannel):
             found = await loop.run_in_executor(None, find_viral_video)
 
             await status_msg.edit(
-                content=f"🎯 **대세 바이럴 영상 발견!** (시도 {attempt+1})\n- 제목: **{found['orig_title']}**\n- 상단 헤더: **{found['line1']} {found['line2']}**\n- 자막: **{found['caption']}**\n\n⚙️ 9:16 랭킹 릴스로 자동 편집 중입니다... (약 15초)"
+                content=f"🎯 **인기 영상 발견!** (시도 {attempt+1})\n- 원제: **{found['orig_title']}**\n- 타이틀: **{found['line1']} {found['line2']}**\n\n⚙️ 9:16 인스타 릴스 및 장면별 공감 자막 제작 중... (약 15초)"
             )
 
             reels_path = await loop.run_in_executor(
                 None,
                 lambda: create_reels_pipeline(
                     video_url=found['url'],
-                    line1_text=found.get('line1', '역대급 해외 바이럴'),
-                    line2_text=found.get('line2', '웃긴 모먼트 TOP5'),
-                    sub_text=found.get('sub', '(다들 몇 번이 제일 웃김? ㅋㅋㅋ)'),
-                    bottom_caption=found.get('caption', '아니 이건 진짜 레전드네 ㅋㅋㅋ 🤣')
+                    line1_text=found.get('line1', '해외에서 화제 된'),
+                    line2_text=found.get('line2', '눈길을 사로잡는 순간'),
+                    sub_text=found.get('sub', '(끝까지 보게 되는 장면)')
                 )
             )
 

@@ -73,10 +73,9 @@ def run_auto_delivery(webhook_url: str = None):
     # 2. 9:16 릴스 자동 합성
     reels_path = create_reels_pipeline(
         video_url=found['url'],
-        line1_text=found.get('line1', '역대급 해외 바이럴'),
-        line2_text=found.get('line2', '웃긴 모먼트 TOP5'),
-        sub_text=found.get('sub', '(다들 몇 번이 제일 웃김? ㅋㅋㅋ)'),
-        bottom_caption=found.get('caption', '아니 이건 진짜 레전드네 ㅋㅋㅋ 🤣')
+        line1_text=found.get('line1', '해외에서 화제 된'),
+        line2_text=found.get('line2', '눈길을 사로잡는 순간'),
+        sub_text=found.get('sub', '(끝까지 보게 되는 장면)')
     )
 
     # 3. 디스코드로 배달
