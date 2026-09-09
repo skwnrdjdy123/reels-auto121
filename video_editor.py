@@ -105,20 +105,20 @@ def render_reels(
                 cmd_inputs.extend(["-i", str(sfx_file)])
                 sfx_tag = f"a_sfx_{sfx_count}"
                 delay_ms = int(cap.get('start', 0.0) * 1000)
-                # 효과음 종류별 최적 볼륨 매핑 (원음 가림 방지 및 선명한 펀치감)
+                # 효과음 종류별 고성능 타격감 볼륨 매핑 (원음에 묻히지 않는 확실한 임팩트)
                 sfx_vol_map = {
-                    "camera": 2.5,
-                    "whoosh": 2.4,
-                    "pop": 2.4,
-                    "bonk": 2.3,
-                    "ding": 2.4,
-                    "boing": 2.3,
-                    "scratch": 2.2,
-                    "buzzer": 2.2,
-                    "glitch": 2.2,
-                    "boom": 2.0,
+                    "camera": 3.0,
+                    "whoosh": 2.8,
+                    "pop": 2.8,
+                    "bonk": 3.0,
+                    "ding": 2.8,
+                    "boing": 2.8,
+                    "scratch": 2.6,
+                    "buzzer": 2.6,
+                    "glitch": 2.6,
+                    "boom": 2.5,
                 }
-                vol = sfx_vol_map.get(sfx_name, 2.2)
+                vol = sfx_vol_map.get(sfx_name, 2.6)
                 audio_filters.append(
                     f"[{current_input_idx}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
                     f"adelay={delay_ms}|{delay_ms},volume={vol}[{sfx_tag}]"
@@ -129,10 +129,10 @@ def render_reels(
                 sfx_count += 1
 
     if sfx_count > 0:
-        # 원본 오디오를 0.75로 정돈하여 효과음이 선명하게 튀어나오도록 밸런싱
-        audio_filters.insert(0, "[0:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,volume=0.75[a_base]")
+        # 원본 오디오를 0.70으로 정돈하여 중요한 순간 효과음이 시원하게 귀에 꽂히도록 믹싱
+        audio_filters.insert(0, "[0:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,volume=0.70[a_base]")
         inputs_str = "[a_base]" + "".join(sfx_mix_tags)
-        audio_filters.append(f"{inputs_str}amix=inputs={sfx_count+1}:duration=first:dropout_transition=0,volume=1.4[a_out]")
+        audio_filters.append(f"{inputs_str}amix=inputs={sfx_count+1}:duration=first:dropout_transition=0,volume=1.5[a_out]")
         map_audio = "[a_out]"
     else:
         map_audio = "0:a?"

@@ -13,7 +13,7 @@ if sys.platform == "win32":
 from downloader import download_video
 from banner_maker import create_top_ranking_header, create_caption_overlay
 from video_editor import render_reels
-from video_finder import generate_human_scene_captions
+from caption_engine import generate_adaptive_smart_captions
 from scripts.generate_sfx import ensure_sfx_assets
 from config import TEMP_DIR
 
@@ -63,8 +63,12 @@ def create_reels_pipeline(
         sub_text=sub_text
     )
 
-    # 3. 억지웃음 없는 장면별 공감형 자막(3단계) 생성
-    scene_captions = generate_human_scene_captions(title=video_info['title'], duration=duration)
+    # 3. 비디오 컷 및 오디오 피크(웃음/타격/고함) 기반 고성능 스마트 자막 & 효과음 동기화
+    scene_captions = generate_adaptive_smart_captions(
+        video_path=raw_video_path,
+        title=video_info['title'],
+        duration=duration
+    )
     caption_items = []
     for idx, sc in enumerate(scene_captions):
         cap_img_path = str(TEMP_DIR / f"caption_{video_info['id']}_{idx}.png")
