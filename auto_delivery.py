@@ -82,6 +82,19 @@ def run_auto_delivery(webhook_url: str = None):
     if success:
         save_processed_id(found['id'])
 
+    # 4. 완전 무인 모드일 경우 인스타그램으로 승인 없이 즉시 다이렉트 업로드
+    auto_ig = os.getenv("AUTO_INSTAGRAM_UPLOAD", "true").lower() == "true"
+    if auto_ig:
+        try:
+            print("🚀 [완전 무인 모드] 인스타그램 릴스 자동 즉시 업로드 진행 중...")
+            from instagram_uploader import upload_reels_to_instagram
+            res = upload_reels_to_instagram(reels_path)
+            # 디스코드 채널로 업로드 성공 알림 전송
+            send_to_discord(reels_path, found, channel_id=DEFAULT_CHANNEL_ID, webhook_url=url)
+            print(f"✓ 인스타 자동 업로드 완료: {res['url']}")
+        except Exception as e:
+            print(f"⚠️ 인스타 자동 업로드 실패: {e}")
+
     print("==========================================")
     print("🎉 무인 배달 완료!")
     print("==========================================")

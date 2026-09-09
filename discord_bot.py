@@ -117,14 +117,87 @@ async def process_auto_reels(channel: discord.TextChannel):
     except Exception as e:
         await status_msg.edit(content=f"⚠️ 자동 탐색 및 제작 중 오류 발생: `{str(e)}`")
 
-@tasks.loop(minutes=60)
+# 무인 자동 업로드 모드 플래그 (True면 승인 버튼 없이 인스타로 바로 직행)
+AUTO_DIRECT_UPLOAD = False
+
+@tasks.loop(minutes=120)
 async def auto_schedule_task():
-    global TARGET_CHANNEL_ID
+    global TARGET_CHANNEL_ID, AUTO_DIRECT_UPLOAD
     if TARGET_CHANNEL_ID:
         channel = bot.get_channel(TARGET_CHANNEL_ID)
         if channel:
-            print("⏰ 정기 자동 릴스 탐색 및 발행 요청 시작...")
-            await process_auto_reels(channel)
+            print("⏰ [정기 스케줄러] 2시간 주기 자동 릴스 실행...")
+            if AUTO_DIRECT_UPLOAD:
+                # 무인 모드: 승인 없이 바로 릴스 인스타 업로드
+                await process_direct_auto_upload(channel)
+            else:
+                # 승인 모드: 디스코드로 영상 보내고 버튼 대기
+                await process_auto_reels(channel)
+
+async def process_direct_auto_upload(channel: discord.TextChannel):
+    """승인 없이 인스타로 즉시 발행하는 완전 무인 함수"""
+    status_msg = await channel.send("🤖 **[무인 자동화] 2시간 주기 릴스 탐색 및 인스타 즉시 발행 중...**")
+    try:
+        loop = asyncio.get_event_loop()
+        found = await loop.run_in_executor(None, find_viral_video)
+        
+        reels_path = await loop.run_in_executor(
+            None,
+            lambda: create_reels_pipeline(
+                video_url=found['url'],
+                line1_text=found['line1'],
+                line2_text=found['line2'],
+                sub_text=found['sub'],
+                bottom_caption=found['caption']
+            )
+        )
+        save_processed_id(found['id'])
+
+        # 인스타로 즉시 업로드
+        res = await loop.run_in_executor(
+            None,
+            lambda: upload_reels_to_instagram(reels_path)
+        )
+
+        filename = Path(reels_path).name
+        discord_file = discord.File(reels_path, filename=filename)
+
+        await channel.send(
+            content=(
+                f"🎉 **[무인 자동 업로드 완료!]** 인스타그램에 새 릴스가 즉시 발행되었습니다!\n"
+                f"🔗 **인스타 링크**: {res['url']}\n"
+                f"📌 **제목**: {found['line1']} {found['line2']}\n"
+                f"💬 **자막**: {found['caption']}"
+            ),
+            file=discord_file
+        )
+        await status_msg.delete()
+    except Exception as e:
+        await status_msg.edit(content=f"⚠️ 무인 자동 발행 중 오류: `{str(e)}`")
+
+@bot.command(name="무인on", aliases=["자동업로드on"])
+async def cmd_direct_on(ctx):
+    """승인 요청 없이 2시간마다 인스타에 바로 올리는 완전 무인 모드 ON"""
+    global TARGET_CHANNEL_ID, AUTO_DIRECT_UPLOAD
+    TARGET_CHANNEL_ID = ctx.channel.id
+    AUTO_DIRECT_UPLOAD = True
+
+    auto_schedule_task.change_interval(minutes=120)
+    if not auto_schedule_task.is_running():
+        auto_schedule_task.start()
+
+    await ctx.reply(
+        "🔥 **[완전 무인 모드 ON]**\n"
+        "이제 **승인 요청 없이 2시간마다** 알아서 영상을 찾아 릴스로 만들고 **인스타그램에 바로바로 업로드**합니다!\n"
+        "(취소하고 싶으시면 `!무인off`를 입력하세요)"
+    )
+
+@bot.command(name="무인off", aliases=["자동업로드off"])
+async def cmd_direct_off(ctx):
+    """완전 무인 모드 OFF (승인 요청 모드로 복귀)"""
+    global AUTO_DIRECT_UPLOAD
+    AUTO_DIRECT_UPLOAD = False
+    await ctx.reply("🛡️ **[승인 검수 모드로 전환]** 이제 영상이 만들어지면 승인 버튼을 먼저 보냅니다.")
 
 @bot.event
 async def on_ready():

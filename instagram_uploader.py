@@ -31,25 +31,36 @@ def get_instagram_credentials():
 
     return username, password
 
+SESSION_TXT_FILE = BASE_DIR / "instagram_session.txt"
+
 def login_instagram() -> Client:
-    """인스타그램 세션 또는 계정 정보로 로그인"""
+    """인스타그램 세션 쿠키(sessionid) 또는 계정 정보로 로그인"""
     cl = Client()
-    cl.delay_range = [1, 3] # 사람처럼 자연스러운 딜레이
+    cl.delay_range = [1, 3]
 
-    username, password = get_instagram_credentials()
+    # 1. 환경변수 또는 파일에서 sessionid 가져오기 (1초 무인증 로그인)
+    session_id = os.getenv("INSTAGRAM_SESSION_ID")
+    if not session_id and SESSION_TXT_FILE.exists():
+        session_id = SESSION_TXT_FILE.read_text().strip()
 
-    if not username or not password:
-        raise ValueError("인스타그램 계정 정보가 설정되지 않았습니다 (instagram_account.json 확인 필요)")
+    if session_id:
+        try:
+            print(f"🔑 sessionid로 인스타그램 로그인 시도 중...")
+            cl.login_by_sessionid(session_id)
+            cl.dump_settings(SESSION_FILE)
+            print("✓ sessionid로 인스타그램 로그인 대성공!")
+            return cl
+        except Exception as e:
+            print(f"⚠️ sessionid 로그인 실패, 계정 정보로 폴백 시도: {e}")
 
-    # 1. 기존 세션 파일이 있으면 재사용 (로그인 차단 방지)
+    # 2. 기존 저장된 세션 파일 재사용
     if SESSION_FILE.exists():
         try:
             cl.load_settings(SESSION_FILE)
-            cl.login(username, password)
-            print("✓ 저장된 인스타그램 세션으로 로그인 성공!")
+            print("✓ 기존 인스타그램 세션 재사용 성공!")
             return cl
-        except Exception as e:
-            print("기존 세션 만료, 새로 로그인 시도...")
+        except Exception:
+            pass
 
     # 2. 신규 로그인
     print(f"🔑 인스타그램 계정(@{username}) 로그인 시도 중...")
