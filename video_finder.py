@@ -67,112 +67,135 @@ def generate_human_scene_captions(title: str, duration: float = 20.0) -> list[di
     억지웃음("ㅋㅋㅋ 🤣", "레전드 ㄷㄷ") 없이,
     사람이 영상을 보면서 실제로 자연스럽게 공감하고 관찰하는 인간미 넘치는 장면별 3단계 자막을 생성합니다.
     """
+def generate_human_scene_captions(title: str, duration: float) -> list[dict]:
+    """
+    레퍼런스 쇼츠(인기 랭킹 및 대세 바이럴)와 100% 동일한 초고속 템포 자막 & 파격적 밈 연출:
+    - 자막이 1.6초 ~ 2.0초마다 바로바로 지나가며 시선을 계속 붙잡음!
+    - 15~25초 영상 기준 7~12개의 찰진 밈/리액션 자막이 쉴 틈 없이 전개!
+    - 각 자막 전환마다 10종 유명 쇼츠 효과음(Whoosh, Pop, Bonk, Boing, Ding, Glitch, Buzzer, Boom, Scratch, Camera)이 리드미컬하게 꽂힘!
+    """
     title_lower = title.lower()
 
-    if any(k in title_lower for k in ["dog", "cat", "pet", "puppy", "kitten", "animal", "고양이", "강아지", "동물"]):
-        step1_pool = [
-            "처음엔 그냥 지나가는 줄 알았는데",
-            "멀리서부터 눈 마주치더니 멈칫함",
-            "살금살금 다가오는 발걸음 봐",
-            "시작부터 이미 장난기 가득한 눈빛"
-        ]
-        step2_pool = [
-            "눈치 살살 보면서 각 재는 중",
-            "자세 잡는 게 진짜 진심이다",
-            "자신만만했던 표정이 점점 진지해짐",
-            "저 눈빛은 이미 마음 정한 눈빛인데"
-        ]
-        step3_pool = [
-            "보고만 있어도 마음이 편안해진다",
-            "하루 피로가 그냥 싹 녹아내림",
-            "이건 몇 번을 다시 봐도 힐링이다",
-            "오늘 본 영상 중에 제일 따뜻함"
-        ]
-    elif any(k in title_lower for k in ["kid", "baby", "child", "toddler", "heartwarming", "wholesome", "아이", "아기"]):
-        step1_pool = [
-            "처음엔 무슨 일인가 싶었는데",
-            "멀리서 서로 알아보고 멈칫함",
-            "달려오는 발걸음부터 신남이 가득함",
-            "마주치는 순간부터 이미 감동"
-        ]
-        step2_pool = [
-            "서로 꼭 껴안는 거 보고 울컥할 뻔",
-            "표정에 순수함이 그대로 묻어남",
-            "세상에 둘밖에 없는 것 같은 순간",
-            "바라보는 눈빛이 너무 다정하다"
-        ]
-        step3_pool = [
-            "진짜 보고 있는 내내 미소가 안 떠남",
-            "이런 게 진짜 사람 사는 맛이지",
-            "마음 따뜻해지는 최고의 명장면",
-            "오늘 하루도 힘내야겠다는 생각이 듬"
-        ]
-    elif any(k in title_lower for k in ["fail", "regret", "clumsy", "caught", "funny", "laugh", "실수", "순간"]):
-        step1_pool = [
-            "시작할 때만 해도 분위기 엄청 좋았음",
-            "자세 잡을 때부터 뭔가 심상치 않더라",
-            "주변 사람들까지 슬슬 긴장하는 중",
-            "이때까진 아무도 몰랐겠지"
-        ]
-        step2_pool = [
-            "서서히 일어나는 변화에 숨죽이게 됨",
-            "순간 타이밍 놓칠까 봐 조마조마함",
-            "점점 걷잡을 수 없이 흘러가는 상황",
-            "표정 하나하나가 너무 생생하다"
-        ]
-        step3_pool = [
-            "이건 생각지도 못한 타이밍이었다",
-            "마지막 반전이 진짜 깊은 여운을 남김",
-            "몇 번을 돌려봐도 순간을 못 잊겠네",
-            "오늘 하루 중 제일 집중해서 본 듯"
-        ]
-    else:
-        step1_pool = [
-            "처음엔 아무 생각 없이 보다가",
-            "눈길을 확 사로잡는 첫인상",
-            "뭔가 심상치 않은 조짐이 보임",
-            "시작부터 묘하게 빠져들게 됨"
-        ]
-        step2_pool = [
-            "점점 분위기에 깊게 몰입하게 됨",
-            "디테일 하나하나가 눈에 들어오기 시작",
-            "생각보다 훨씬 진지한 상황",
-            "여기서부터 숨죽이고 보게 됨"
-        ]
-        step3_pool = [
-            "끝까지 보길 정말 잘했다는 생각",
-            "여운이 꽤 오래 남는 명장면",
-            "주변 사람들에게도 꼭 보여주고 싶어짐",
-            "다시 봐도 타이밍이 진짜 예술이다"
-        ]
-
-    # 3단계 시간 구간 배분 및 유명 쇼츠 10종 효과음(SFX) 다채로운 매핑
-    t1 = round(max(2.5, duration * 0.32), 1)
-    t2 = round(max(t1 + 2.5, duration * 0.65), 1)
-    t3 = round(max(t2 + 2.5, duration), 1)
-
-    # 1단계 도입 효과음 풀: 빠른 전환 및 시선 집중
-    sfx1_candidates = ["whoosh", "camera", "pop"]
-    # 2단계 전개 효과음 풀: 재미있는 상황, 실수, 호기심
-    if any(k in title_lower for k in ["fail", "clumsy", "regret", "실수"]):
-        sfx2_candidates = ["bonk", "boing", "glitch"]
-    elif any(k in title_lower for k in ["cat", "dog", "pet", "동물"]):
-        sfx2_candidates = ["boing", "pop", "camera"]
-    else:
-        sfx2_candidates = ["pop", "boing", "bonk"]
-
-    # 3단계 결말/반전 효과음 풀: 레전드 펀치라인, 반전, 감탄
-    sfx3_candidates = ["ding", "scratch", "boom", "buzzer"]
-
-    sfx1 = random.choice(sfx1_candidates)
-    sfx2 = random.choice(sfx2_candidates)
-    sfx3 = random.choice(sfx3_candidates)
-
-    captions = [
-        {"text": random.choice(step1_pool), "start": 0.0, "end": t1, "sfx": sfx1},
-        {"text": random.choice(step2_pool), "start": t1, "end": t2, "sfx": sfx2},
-        {"text": random.choice(step3_pool), "start": t2, "end": t3, "sfx": sfx3}
+    # 1. 쇼츠 특유의 파격적이고 찰진 리액션/상황 멘트 풀 (단계별 빌드업)
+    # [1단계: 도입 0~3초] - 시선 강탈 & 호기심 유발
+    intro_pool = [
+        "처음엔 다들 그냥 장난인 줄 앎ㅋㅋ",
+        "시작부터 각도 심상치 않음;;",
+        "슬슬 시동 걸기 시작하는데...",
+        "여기서 갑자기 이걸 던진다고??",
+        "초반부터 텐션 미쳐버림ㅋㅋㅋ",
+        "자세 잡는 거부터 예사롭지 않음ㄷㄷ",
+        "이때까진 다들 평화로웠음ㅋㅋ"
     ]
+
+    # [2단계: 전개 3~9초] - 긴장감 고조 & 찰진 해설
+    if any(k in title_lower for k in ["fail", "clumsy", "regret", "caught", "실수", "레전드"]):
+        buildup_pool = [
+            "바람 부는데 왜 하필 지금임?ㅋㅋ",
+            "친구 세워두고 각 재는 중;;",
+            "실수하면 바로 응급실행ㄷㄷ",
+            "이게 왜 여기서 꺾이냐고ㅋㅋㅋ",
+            "순간 타이밍 놓칠까 봐 조마조마함",
+            "친구 표정 슬슬 굳어가는 중ㅋㅋㅋ",
+            "저 각도에서 저게 들어간다고??",
+            "보는 내가 다 식은땀 남;;"
+        ]
+    elif any(k in title_lower for k in ["dog", "cat", "pet", "animal", "고양이", "강아지"]):
+        buildup_pool = [
+            "눈치 살살 보면서 각 재는 중ㅋㅋ",
+            "살금살금 다가오는 발걸음 봐ㅋㅋ",
+            "저 눈빛은 이미 결심한 눈빛임ㄷㄷ",
+            "혼자 진지해서 더 웃김ㅋㅋㅋ",
+            "갑자기 왜 저러는지 아는 사람??",
+            "순간 엉뚱한 데로 튀어버림ㅋㅋㅋ"
+        ]
+    else:
+        buildup_pool = [
+            "자세 잡는 게 진짜 진심이다ㄷㄷ",
+            "이 타이밍에 저걸 시도한다고??",
+            "주변 사람들도 슬슬 긴장함ㅋㅋ",
+            "이게 왜 진짜 되는 거냐고ㅋㅋㅋ",
+            "숨죽이고 보게 되는 긴장감;;"
+        ]
+
+    # [3단계: 절정/반전 9~15초] - 대폭소 & 뇌정지 리액션
+    climax_pool = [
+        "순간 다 같이 뇌정지 옴ㅋㅋㅋ",
+        "보고도 안 믿김 실화냐ㄷㄷ",
+        "이게 되네?? ㅋㅋㅋㅋ",
+        "옆 사람 턱 빠지기 직전ㅋㅋㅋ",
+        "진짜 숨도 못 쉬고 봄ㅋㅋㅋ",
+        "표정 하나로 상황 종결ㅋㅋㅋ",
+        "이 타이밍에 이게 터진다고??",
+        "웃겨서 숨 넘어갈 뻔함ㅋㅋㅋ",
+        "현실 당황한 거 다 티 남ㅋㅋㅋ"
+    ]
+
+    # [4단계: 결말 15초~끝] - 레전드 박제 & 인터랙션 유도
+    outro_pool = [
+        "마지막 표정이 진짜 킬포임ㅋㅋㅋ",
+        "결말 보고 현실 웃음 터짐ㅋㅋㅋ",
+        "이건 평생 박제감이다ㅋㅋㅋ",
+        "외국인들 댓글 난리 난 이유ㅋㅋㅋ",
+        "다들 몇 번이 젤 레전드임? 댓글 ㄱㄱ",
+        "오늘 하루 중 제일 크게 웃음ㅋㅋㅋ"
+    ]
+
+    # 2. 1.8초 단위 고속 전환 타임스탬프 분할
+    step_duration = 1.8
+    total_steps = max(3, int(duration / step_duration))
+    
+    # 10종 효과음 순환 믹스 (지루함 0%, 전환 타격감 극대화)
+    sfx_cycle = [
+        "whoosh", "pop", "camera", "bonk", "boing", 
+        "glitch", "ding", "buzzer", "scratch", "boom"
+    ]
+    random.shuffle(intro_pool)
+    random.shuffle(buildup_pool)
+    random.shuffle(climax_pool)
+    random.shuffle(outro_pool)
+
+    captions = []
+    intro_idx = 0
+    build_idx = 0
+    climax_idx = 0
+    outro_idx = 0
+
+    for i in range(total_steps):
+        s = round(i * step_duration, 2)
+        e = round(min(duration, (i + 1) * step_duration), 2)
+        if s >= duration:
+            break
+
+        progress = i / max(1, total_steps - 1)
+        if progress < 0.25:
+            # 1단계 도입
+            text = intro_pool[intro_idx % len(intro_pool)]
+            intro_idx += 1
+            sfx = sfx_cycle[i % len(sfx_cycle)]
+        elif progress < 0.65:
+            # 2단계 전개
+            text = buildup_pool[build_idx % len(buildup_pool)]
+            build_idx += 1
+            sfx = sfx_cycle[i % len(sfx_cycle)]
+        elif progress < 0.88:
+            # 3단계 절정
+            text = climax_pool[climax_idx % len(climax_pool)]
+            climax_idx += 1
+            sfx = sfx_cycle[i % len(sfx_cycle)]
+        else:
+            # 4단계 결말
+            text = outro_pool[outro_idx % len(outro_pool)]
+            outro_idx += 1
+            sfx = "boom" if i == total_steps - 1 else sfx_cycle[i % len(sfx_cycle)]
+
+        captions.append({
+            "text": text,
+            "start": s,
+            "end": e,
+            "sfx": sfx
+        })
+
     return captions
 
 

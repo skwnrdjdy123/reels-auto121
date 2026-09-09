@@ -102,16 +102,16 @@ def create_caption_overlay(
     caption_text: str,
     output_path: str,
     font_path: str = DEFAULT_FONT_PATH,
-    y_pos: int = 1460
+    y_pos: int = 1300
 ) -> str:
     """
-    장면별 전환을 위한 투명 1080x1920 캔버스 위의 독립형 자막 PNG를 생성합니다.
+    레퍼런스 쇼츠와 100% 동일한 선명한 검정 박스 + 초고화질 볼드 자막 오버레이 생성
     """
     img = Image.new("RGBA", (TARGET_WIDTH, TARGET_HEIGHT), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
     try:
-        font = ImageFont.truetype(font_path, 46)
+        font = ImageFont.truetype(font_path, 50)
     except Exception:
         font = ImageFont.load_default()
 
@@ -120,16 +120,23 @@ def create_caption_overlay(
         text_w = bbox[2] - bbox[0]
         text_h = bbox[3] - bbox[1]
 
-        pad_x = 36
+        pad_x = 32
         pad_y = 16
-        box_x1 = max(60, (TARGET_WIDTH - text_w) // 2 - pad_x)
-        box_x2 = min(TARGET_WIDTH - 60, (TARGET_WIDTH + text_w) // 2 + pad_x)
+        box_x1 = max(40, (TARGET_WIDTH - text_w) // 2 - pad_x)
+        box_x2 = min(TARGET_WIDTH - 40, (TARGET_WIDTH + text_w) // 2 + pad_x)
         box_y1 = y_pos - pad_y
         box_y2 = y_pos + text_h + pad_y
 
-        draw.rounded_rectangle([(box_x1, box_y1), (box_x2, box_y2)], radius=18, fill=(0, 0, 0, 230))
+        # 레퍼런스 스타일: 또렷하고 깔끔한 블랙 박스 (인스타 UI 안전지대)
+        draw.rounded_rectangle([(box_x1, box_y1), (box_x2, box_y2)], radius=12, fill=(0, 0, 0, 240))
         text_x = (TARGET_WIDTH - text_w) // 2
-        draw.text((text_x, y_pos), caption_text, font=font, fill=(255, 255, 255, 255))
+        
+        # 특정 감탄사나 킬포 단어가 있으면 옐로우 하이라이트
+        text_color = (255, 255, 255, 255)
+        if any(w in caption_text for w in ["킬포", "레전드", "ㄷㄷ", "실화냐", "뇌정지"]):
+            text_color = (255, 235, 59, 255)
+
+        draw.text((text_x, y_pos), caption_text, font=font, fill=text_color)
 
     img.save(output_path, "PNG")
     return output_path
