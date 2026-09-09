@@ -138,15 +138,15 @@ def generate_human_scene_captions(title: str, duration: float = 20.0) -> list[di
             "다시 봐도 타이밍이 진짜 예술이다"
         ]
 
-    # 3단계 시간 구간 배분
+    # 3단계 시간 구간 배분 및 상황별 최적 효과음(SFX) 매핑
     t1 = round(max(3.0, duration * 0.33), 1)
     t2 = round(max(t1 + 3.0, duration * 0.68), 1)
     t3 = round(max(t2 + 3.0, duration), 1)
 
     captions = [
-        {"text": random.choice(step1_pool), "start": 0.0, "end": t1},
-        {"text": random.choice(step2_pool), "start": t1, "end": t2},
-        {"text": random.choice(step3_pool), "start": t2, "end": t3}
+        {"text": random.choice(step1_pool), "start": 0.0, "end": t1, "sfx": "whoosh"},
+        {"text": random.choice(step2_pool), "start": t1, "end": t2, "sfx": "pop"},
+        {"text": random.choice(step3_pool), "start": t2, "end": t3, "sfx": "ding"}
     ]
     return captions
 

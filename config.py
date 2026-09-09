@@ -5,9 +5,11 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 TEMP_DIR = BASE_DIR / "temp"
 OUTPUT_DIR = BASE_DIR / "output"
+SFX_DIR = BASE_DIR / "sfx"
 
 TEMP_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
+SFX_DIR.mkdir(exist_ok=True)
 
 # 릴스 비디오 규격 (9:16)
 TARGET_WIDTH = 1080

@@ -46,6 +46,7 @@ def render_reels(
         "-i", overlay_image_path
     ]
 
+    # --- 비디오 필터 구성 ---
     if caption_items:
         filters.append("[canvas_with_video][1:v]overlay=0:0[v_hdr]")
         last_tag = "v_hdr"
@@ -60,12 +61,57 @@ def render_reels(
     else:
         filters.append("[canvas_with_video][1:v]overlay=0:0[v_out]")
 
-    filter_complex_str = ";".join(filters)
+    # --- 오디오 효과음(SFX) 믹싱 구성 ---
+    from config import SFX_DIR
+    audio_sfx_inputs = []
+    audio_filters = []
+    
+    # 원본 오디오를 44.1kHz 스테레오로 정규화
+    audio_filters.append("[0:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,volume=1.0[a_base]")
+
+    current_input_idx = cmd_inputs.count("-i")  # 정확한 다음 입력 스트림 인덱스
+    sfx_count = 0
+    sfx_mix_tags = ["[a_base]"]
+
+    if caption_items:
+        for cap in caption_items:
+            sfx_name = cap.get('sfx')
+            if not sfx_name:
+                continue
+            sfx_file = SFX_DIR / f"{sfx_name}.wav"
+            if not sfx_file.exists():
+                # pop이나 whoosh 기본 효과음으로 대체
+                sfx_file = SFX_DIR / "pop.wav"
+
+            if sfx_file.exists():
+                cmd_inputs.extend(["-i", str(sfx_file)])
+                delay_ms = int(cap.get('start', 0.0) * 1000)
+                sfx_tag = f"a_sfx_{sfx_count}"
+                # 효과음 딜레이 및 볼륨 조절
+                vol = 0.85 if sfx_name in ["whoosh", "pop"] else 0.75
+                audio_filters.append(
+                    f"[{current_input_idx}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
+                    f"adelay={delay_ms}|{delay_ms},volume={vol}[{sfx_tag}]"
+                )
+                sfx_mix_tags.append(f"[{sfx_tag}]")
+                current_input_idx += 1
+                sfx_count += 1
+
+    if sfx_count > 0:
+        inputs_str = "".join(sfx_mix_tags)
+        # amix로 원본 오디오와 효과음들을 깔끔하게 합성
+        audio_filters.append(f"{inputs_str}amix=inputs={sfx_count+1}:duration=first:dropout_transition=0,volume=1.6[a_out]")
+        map_audio = "[a_out]"
+    else:
+        map_audio = "0:a?"
+
+    all_filters = filters + audio_filters
+    filter_complex_str = ";".join(all_filters)
 
     cmd = cmd_inputs + [
         "-filter_complex", filter_complex_str,
         "-map", "[v_out]",
-        "-map", "0:a?",
+        "-map", map_audio,
         "-c:v", "libx264",
         "-profile:v", "high",
         "-level", "4.1",
@@ -81,7 +127,7 @@ def render_reels(
         output_path
     ]
 
-    print(f"FFmpeg 랭킹 스타일 릴스 렌더링 시작: {output_path}")
+    print(f"FFmpeg 랭킹 스타일 및 효과음 믹싱 릴스 렌더링 시작: {output_path}")
     process = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="ignore")
     
     if process.returncode != 0:

@@ -27,7 +27,7 @@ jobs:
       - name: 4. 필수 파이썬 라이브러리 설치
         run: |
           python -m pip install --upgrade pip
-          pip install yt-dlp pillow requests deep-translator
+          pip install yt-dlp pillow requests deep-translator numpy instagrapi discord.py
 
       - name: 5. 릴스 자동 탐색 및 디스코드 배달 실행
         env:

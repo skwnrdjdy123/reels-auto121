@@ -14,6 +14,7 @@ from downloader import download_video
 from banner_maker import create_top_ranking_header, create_caption_overlay
 from video_editor import render_reels
 from video_finder import generate_human_scene_captions
+from scripts.generate_sfx import ensure_sfx_assets
 from config import TEMP_DIR
 
 def create_reels_pipeline(
@@ -37,6 +38,9 @@ def create_reels_pipeline(
     print(f"🎬 인스타 최적화 릴스 제작 시작!")
     print(f"🔗 영상 URL: {video_url}")
     print(f"==========================================")
+
+    # 효과음 에셋 확인 및 자동 생성
+    ensure_sfx_assets()
 
     # 1. 비디오 다운로드 (최대 30초)
     print("\n[1/3] 비디오 다운로드 중...")
@@ -67,9 +71,10 @@ def create_reels_pipeline(
             'image_path': cap_img_path,
             'start': sc['start'],
             'end': sc['end'],
-            'text': sc['text']
+            'text': sc['text'],
+            'sfx': sc.get('sfx')
         })
-        print(f"   - 장면 {idx+1} ({sc['start']}s ~ {sc['end']}s): \"{sc['text']}\"")
+        print(f"   - 장면 {idx+1} ({sc['start']}s ~ {sc['end']}s, SFX: {sc.get('sfx')}): \"{sc['text']}\"")
 
     # 4. FFmpeg 릴스 렌더링
     print("\n[3/3] FFmpeg 다중 장면 자막 릴스 렌더링 중...")
