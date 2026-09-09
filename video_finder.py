@@ -16,14 +16,17 @@ if sys.platform == "win32":
 
 PROCESSED_FILE = BASE_DIR / "processed_videos.json"
 
+# 대중적으로 조회수 폭발하는 메가 트렌드 밈 키워드
 SEARCH_QUERIES = [
-    "#shorts funny memes",
-    "#shorts unexpected viral",
-    "#shorts funny pets cats dogs",
-    "#shorts try not to laugh",
-    "#shorts hilarious moments",
-    "#shorts instant karma",
-    "#shorts meme compilation"
+    "try not to laugh hilarious shorts 1M views",
+    "funniest moments caught on camera viral shorts",
+    "best funny pet moments viral shorts",
+    "instant regret hilarious shorts",
+    "people being dumb funny shorts 1M",
+    "unexpected wholesome and funny viral shorts",
+    "laugh challenge viral meme shorts",
+    "failarmy funniest shorts",
+    "viralhog hilarious shorts"
 ]
 
 REACTION_PHRASES = [
@@ -51,9 +54,9 @@ def save_processed_id(video_id: str):
     with open(PROCESSED_FILE, "w", encoding="utf-8") as f:
         json.dump(list(processed), f, ensure_ascii=False, indent=2)
 
-def generate_korean_hook(english_title: str) -> tuple[str, str]:
+def generate_korean_hook(english_title: str) -> tuple[str, str, str, str]:
     """
-    영문 제목을 번역하고 한국 인스타 릴스에 맞게 후킹 타이틀과 하단 반응 문구를 생성합니다.
+    영문 제목을 번역하고 한국 인스타 릴스에 맞게 랭킹 후킹 타이틀을 생성합니다.
     """
     # 해시태그 제거 및 정리
     clean_title = english_title.split('#')[0].strip()
@@ -65,8 +68,8 @@ def generate_korean_hook(english_title: str) -> tuple[str, str]:
     try:
         translator = GoogleTranslator(source='auto', target='ko')
         translated = translator.translate(clean_title)
-        if len(translated) > 25:
-            translated = translated[:25] + "..."
+        if len(translated) > 22:
+            translated = translated[:22] + "..."
     except Exception:
         translated = clean_title[:20]
 
@@ -79,7 +82,7 @@ def generate_korean_hook(english_title: str) -> tuple[str, str]:
         "해외에서 난리 난"
     ]
     line1_text = random.choice(line1_options)
-    line2_text = f"{translated[:14]} 모먼트" if len(translated) > 4 else "모먼트 랭킹 TOP5"
+    line2_text = f"{translated} 모먼트" if len(translated) > 3 else "모먼트 랭킹 TOP5"
     sub_text = random.choice([
         "(다들 몇 번이 제일 웃김? ㅋㅋㅋ)",
         "(마지막 결말 실화냐고 ㅋㅋㅋ)",
@@ -90,9 +93,9 @@ def generate_korean_hook(english_title: str) -> tuple[str, str]:
 
     return line1_text, line2_text, sub_text, bottom_caption
 
-def find_viral_video() -> dict:
+def find_viral_video(min_views: int = 300000) -> dict:
     """
-    해외 유튜브 쇼츠에서 아직 제작하지 않은 인기 바이럴 영상을 1개 탐색하여 반환합니다.
+    조회수 30만~수백만 이상 터진 '검증된 대중적 메가 트렌드 쇼츠'만 엄선하여 탐색합니다.
     """
     processed_ids = load_processed_ids()
     random.shuffle(SEARCH_QUERIES)
@@ -105,27 +108,37 @@ def find_viral_video() -> dict:
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         for query in SEARCH_QUERIES:
-            print(f"🔍 해외 바이럴 영상 탐색 중... (키워드: {query})")
+            print(f"🔍 메가 바이럴 트렌드 탐색 중... (키워드: {query})")
             try:
-                search_result = ydl.extract_info(f"ytsearch20:{query}", download=False)
+                # 상위 25개 검색 결과 분석
+                search_result = ydl.extract_info(f"ytsearch25:{query}", download=False)
             except Exception:
                 continue
 
             entries = search_result.get('entries', []) if search_result else []
+
+            # 1. 조회수 높은 순서로 정렬 (조회수 없는 건 뒤로)
+            entries.sort(key=lambda x: x.get('view_count') or 0, reverse=True)
 
             for entry in entries:
                 v_id = entry.get('id')
                 if not v_id or v_id in processed_ids:
                     continue
 
+                v_title = entry.get('title', '')
+                title_lower = v_title.lower()
+
+                # 1. 라이브 방송, 24시간 스트리밍 제외
+                if any(bad in title_lower for bad in ["live", "24/7", "stream", "broadcast"]):
+                    continue
+
+                # 2. 재생시간 필터 (8초 ~ 45초 사이의 임팩트 있는 단일 숏폼만)
                 v_duration = entry.get('duration')
-                if v_duration and v_duration > 65:
+                if v_duration and (v_duration < 7 or v_duration > 50):
                     continue
 
                 v_url = f"https://www.youtube.com/shorts/{v_id}"
-                v_title = entry.get('title', 'Viral Short')
-
-                print(f"🎯 신규 바이럴 영상 발견: {v_title} ({v_url})")
+                print(f"🎯 검증된 대세 밈 영상 발견! | 제목: {v_title}")
                 line1, line2, sub, caption = generate_korean_hook(v_title)
 
                 return {
@@ -136,7 +149,6 @@ def find_viral_video() -> dict:
                     'line2': line2,
                     'sub': sub,
                     'caption': caption,
-                    # 기존 호환용
                     'top_title': f"{line1} {line2}",
                     'bottom_text': caption
                 }
