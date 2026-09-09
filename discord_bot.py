@@ -3,7 +3,9 @@ import sys
 import asyncio
 from pathlib import Path
 import discord
+from discord import app_commands
 from discord.ext import commands, tasks
+
 from config import BASE_DIR, OUTPUT_DIR
 from pipeline import create_reels_pipeline
 from video_finder import find_viral_video, save_processed_id
@@ -323,11 +325,180 @@ async def cmd_direct_off(ctx):
 async def on_ready():
     print("==========================================")
     print(f"🤖 릴스 전자동 매니저 봇 온라인! ({bot.user.name})")
-    print("디스코드 명령어:")
-    print("  !탐색 또는 !자동 : 지금 즉시 해외 바이럴 영상을 찾아 릴스 제작")
-    print("  !자동켜기 <분>   : 지정한 분마다 자동으로 영상 찾아서 배달")
-    print("  !자동끄기        : 정기 자동 탐색 끄기")
+    try:
+        synced = await bot.tree.sync()
+        print(f"✓ 디스코드 슬래시 커맨드 {len(synced)}개 서버 동기화 완료!")
+    except Exception as e:
+        print(f"슬래시 커맨드 동기화 실패: {e}")
+    print("디스코드 슬래시 명령어:")
+    print("  /탐색    : 인기 영상 즉시 탐색 및 릴스 제작")
+    print("  /수정    : 영상 제목/문구 수정 후 재제작")
+    print("  /자동켜기: 정기 자동 릴스 탐색 및 배달 시작")
+    print("  /자동끄기: 정기 자동 탐색 중지")
+    print("  /무인on  : 승인 없는 인스타 즉시 직행 모드")
+    print("  /무인off : 승인 검수 모드로 복귀")
+    print("  /명령어  : 전체 도움말 확인")
     print("==========================================")
+
+# ==========================================
+# 🚀 슬래시 커맨드 (Slash Commands: /명령어)
+# ==========================================
+
+@bot.tree.command(name="탐색", description="지금 즉시 인기 랭킹 쇼츠/해외 바이럴 영상을 찾아 릴스로 제작합니다.")
+async def slash_find(interaction: discord.Interaction):
+    global TARGET_CHANNEL_ID
+    TARGET_CHANNEL_ID = interaction.channel.id
+    await interaction.response.send_message("🔍 **실시간 인기 영상을 탐색하여 릴스 제작을 시작합니다...**")
+    await process_auto_reels(interaction.channel)
+
+@bot.tree.command(name="수정", description="특정 영상 또는 최근 영상을 원하는 제목과 문구로 다시 제작합니다.")
+@app_commands.describe(
+    제목="원하는 제목 (예: 모먼트 랭킹 TOP5 또는 1줄 / 2줄 / 서브문구)",
+    유튜브링크="수정할 유튜브 영상 링크 (비워두면 가장 최근 생성된 영상을 재편집합니다)"
+)
+async def slash_edit(interaction: discord.Interaction, 제목: str, 유튜브링크: str = ""):
+    await interaction.response.defer()
+    channel_id = interaction.channel.id
+    target_url = 유튜브링크.strip()
+    line1 = "역대급 해외 바이럴"
+    line2 = "모먼트 랭킹 TOP5"
+    sub = "(다들 몇 번이 제일 웃김? ㅋㅋㅋ)"
+
+    if not target_url:
+        last_info = LAST_PROCESSED_VIDEO.get(channel_id)
+        if last_info:
+            target_url = last_info['url']
+            line1 = last_info.get('line1', line1)
+            line2 = last_info.get('line2', line2)
+            sub = last_info.get('sub', sub)
+        else:
+            await interaction.followup.send(
+                "⚠️ 최근 작업한 영상이 없습니다. `유튜브링크` 옵션에 영상 URL을 함께 입력해 주세요!"
+            )
+            return
+
+    parts = [p.strip() for p in 제목.split("/") if p.strip()]
+    if len(parts) >= 3:
+        line1, line2, sub = parts[0], parts[1], parts[2]
+    elif len(parts) == 2:
+        line1, line2 = parts[0], parts[1]
+    elif len(parts) == 1:
+        line2 = parts[0]
+
+    status_msg = await interaction.followup.send(
+        f"🛠️ **[릴스 재제작 시작]** 영상을 요청하신 설정으로 다시 편집하고 있습니다...\n"
+        f"- 대상 영상: {target_url}\n"
+        f"- 1줄 타이틀: `{line1}`\n"
+        f"- 2줄 타이틀: `{line2}`\n"
+        f"- 서브 훅: `{sub}`\n"
+        f"⏳ 약 15초 소요됩니다."
+    )
+
+    try:
+        loop = asyncio.get_event_loop()
+        reels_path = await loop.run_in_executor(
+            None,
+            lambda: create_reels_pipeline(
+                video_url=target_url,
+                line1_text=line1,
+                line2_text=line2,
+                sub_text=sub
+            )
+        )
+        filename = Path(reels_path).name
+        video_id = Path(target_url).name
+
+        LAST_PROCESSED_VIDEO[channel_id] = {
+            'url': target_url,
+            'id': video_id,
+            'line1': line1,
+            'line2': line2,
+            'sub': sub,
+            'filename': filename
+        }
+
+        view = ReelsApprovalView(
+            reels_filename=filename,
+            video_id=video_id,
+            video_url=target_url,
+            channel=interaction.channel,
+            line1=line1,
+            line2=line2,
+            sub=sub
+        )
+        discord_file = discord.File(reels_path, filename=filename)
+
+        await interaction.channel.send(
+            content=f"✨ **수정된 릴스가 완성되었습니다!**\n🔗 원본 링크: {target_url}\n마음에 드시면 **[✅ 인스타 업로드 승인]**을 눌러주세요:",
+            file=discord_file,
+            view=view
+        )
+    except Exception as e:
+        await interaction.channel.send(f"⚠️ 영상 재제작 중 오류 발생: `{str(e)}`")
+
+@bot.tree.command(name="자동켜기", description="지정한 시간(분)마다 자동으로 영상을 찾아 릴스로 편집 후 배달합니다.")
+@app_commands.describe(간격_분="탐색 주기(분 단위, 기본: 60분)")
+async def slash_start_auto(interaction: discord.Interaction, 간격_분: int = 60):
+    global TARGET_CHANNEL_ID, AUTO_INTERVAL_MINUTES
+    TARGET_CHANNEL_ID = interaction.channel.id
+    AUTO_INTERVAL_MINUTES = 간격_분
+    
+    auto_schedule_task.change_interval(minutes=간격_분)
+    if not auto_schedule_task.is_running():
+        auto_schedule_task.start()
+    
+    await interaction.response.send_message(
+        f"🚀 **무인 자동화 가동!** 이제 **{간격_분}분**마다 해외 바이럴 영상을 알아서 찾아 릴스로 편집 후 이곳에 배달합니다!"
+    )
+
+@bot.tree.command(name="자동끄기", description="정기 자동 릴스 탐색 및 배달을 중지합니다.")
+async def slash_stop_auto(interaction: discord.Interaction):
+    if auto_schedule_task.is_running():
+        auto_schedule_task.stop()
+    await interaction.response.send_message("🛑 정기 자동 탐색이 중지되었습니다.")
+
+@bot.tree.command(name="무인on", description="승인 요청 없이 2시간마다 인스타로 바로 즉시 발행하는 완전 무인 모드를 켭니다.")
+async def slash_direct_on(interaction: discord.Interaction):
+    global TARGET_CHANNEL_ID, AUTO_DIRECT_UPLOAD
+    TARGET_CHANNEL_ID = interaction.channel.id
+    AUTO_DIRECT_UPLOAD = True
+
+    auto_schedule_task.change_interval(minutes=120)
+    if not auto_schedule_task.is_running():
+        auto_schedule_task.start()
+
+    await interaction.response.send_message(
+        "🔥 **[완전 무인 모드 ON]**\n"
+        "이제 **승인 요청 없이 2시간마다** 알아서 영상을 찾아 릴스로 만들고 **인스타그램에 바로바로 업로드**합니다!\n"
+        "(취소하고 싶으시면 `/무인off`를 입력하세요)"
+    )
+
+@bot.tree.command(name="무인off", description="완전 무인 모드를 끄고 영상 확인 후 승인하는 검수 모드로 복귀합니다.")
+async def slash_direct_off(interaction: discord.Interaction):
+    global AUTO_DIRECT_UPLOAD
+    AUTO_DIRECT_UPLOAD = False
+    await interaction.response.send_message("🛡️ **[승인 검수 모드로 전환]** 이제 영상이 만들어지면 승인 버튼을 먼저 보냅니다.")
+
+@bot.tree.command(name="명령어", description="릴스 자동화 봇의 모든 사용 가능한 명령어 안내를 확인합니다.")
+async def slash_help(interaction: discord.Interaction):
+    help_text = (
+        "📖 **릴스 자동화 봇 슬래시(/) 명령어 안내**\n\n"
+        "채팅창에 `/`만 치셔도 아래의 모든 명령어가 자동완성 팝업으로 뜹니다!\n\n"
+        "🔍 **탐색 및 제작**\n"
+        "• `/탐색` : 지금 즉시 인기 랭킹 쇼츠/바이럴 영상을 찾아 릴스 제작\n"
+        "• `https://유튜브링크` : 링크만 채팅에 붙여넣어도 해당 영상으로 즉시 릴스 제작\n\n"
+        "✏️ **영상 수정 및 재제작**\n"
+        "• **버튼 클릭**: 영상 아래 **[✏️ 자막/제목 직접 수정]** 버튼을 누르면 팝업창에서 바로 수정 가능!\n"
+        "• `/수정 <제목> [유튜브링크]` : 특정 영상 또는 최근 영상을 원하는 제목으로 다시 제작\n\n"
+        "⏰ **자동 스케줄러 & 무인 모드**\n"
+        "• `/자동켜기 [간격_분]` : 지정한 분마다 자동으로 영상을 찾아 배달 (기본 60분)\n"
+        "• `/자동끄기` : 자동 배달 중지\n"
+        "• `/무인on` : 승인 버튼 없이 2시간마다 인스타로 바로 즉시 발행하는 완전 무인 모드\n"
+        "• `/무인off` : 승인 검수 모드로 복귀\n"
+        "• `/명령어` : 전체 명령어 및 도움말 보기\n"
+    )
+    await interaction.response.send_message(help_text)
+
 
 @bot.command(name="탐색", aliases=["자동"])
 async def cmd_find(ctx):
