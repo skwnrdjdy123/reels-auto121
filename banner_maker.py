@@ -102,7 +102,7 @@ def create_caption_overlay(
     caption_text: str,
     output_path: str,
     font_path: str = DEFAULT_FONT_PATH,
-    y_pos: int = 1370
+    y_pos: int = 1460
 ) -> str:
     """
     장면별 전환을 위한 투명 1080x1920 캔버스 위의 독립형 자막 PNG를 생성합니다.

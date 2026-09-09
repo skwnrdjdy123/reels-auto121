@@ -22,44 +22,75 @@ def render_reels(
     
     output_path = str(OUTPUT_DIR / output_filename)
 
-    # 인스타그램 릴스 Safe Zone 최적화 비디오 영역
-    # 상단 헤더 400px 제외한 Y: 400 ~ 1920 (높이 1520)
-    VIDEO_AREA_H = 1520
-    VIDEO_START_Y = 400
-
-    filters = [
-        # 1. 배경용 영상: 1080x1520으로 채우고 부드러운 가우시안 블러 처리
-        "[0:v]split=2[bg_raw][fg_raw]",
-        f"[bg_raw]scale={TARGET_WIDTH}:{VIDEO_AREA_H}:force_original_aspect_ratio=increase,crop={TARGET_WIDTH}:{VIDEO_AREA_H},boxblur=30:5,eq=brightness=-0.18[bg_video]",
-        # 2. 전경 영상: 1080x1520 영역 내에 비율 완벽 유지하며 중앙 배치
-        f"[fg_raw]scale={TARGET_WIDTH}:{VIDEO_AREA_H}:force_original_aspect_ratio=decrease[fg_video]",
-        # 3. 배경 위에 전경을 정중앙 오버레이
-        "[bg_video][fg_video]overlay=(W-w)/2:(H-h)/2[video_merged]",
-        # 4. 전체 1080x1920 블랙 캔버스에 비디오를 Y=400 위치에 올림
-        f"color=c=black:s={TARGET_WIDTH}x{TARGET_HEIGHT}:r={FPS}[base_canvas]",
-        f"[base_canvas][video_merged]overlay=0:{VIDEO_START_Y}[canvas_with_video]"
+    # 원본 영상 해상도 확인
+    probe_cmd = [
+        "ffprobe", "-v", "error",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=width,height",
+        "-of", "csv=s=x:p=0",
+        input_video_path
     ]
+    is_vertical = False
+    try:
+        res = subprocess.check_output(probe_cmd, text=True).strip()
+        if "x" in res:
+            w, h = map(int, res.split("x")[:2])
+            if h > w * 1.2:  # 이미 세로 쇼츠 영상인 경우
+                is_vertical = True
+    except Exception as e:
+        print(f"해상도 측정 실패: {e}")
+
+    if is_vertical:
+        # 이미 세로 쇼츠인 경우:
+        # 영상을 억지로 축소시켜 위아래/양옆에 검은 여백을 만들지 않고, 1080x1920 풀화면으로 배치!
+        # 기존 영상 내 텍스트와 겹치는 상단 헤더/하단 자막은 중복 삽입하지 않거나 최소화합니다.
+        filters = [
+            f"[0:v]scale={TARGET_WIDTH}:{TARGET_HEIGHT}:force_original_aspect_ratio=increase,crop={TARGET_WIDTH}:{TARGET_HEIGHT}[v_full]",
+        ]
+        base_video_tag = "v_full"
+    else:
+        # 가로 영상(16:9) 또는 정사각형 원본인 경우 (이상적인 밈/클립 소스):
+        # 상단 400px 헤더바 + 중앙 비디오(가로) + 하단 여백 자막바
+        # 자막이 원본 영상을 절대 가리지 않고 하단 검은 여백에 깔끔하게 들어감!
+        VIDEO_AREA_H = 1000
+        VIDEO_START_Y = 420
+        filters = [
+            "[0:v]split=2[bg_raw][fg_raw]",
+            f"[bg_raw]scale={TARGET_WIDTH}:{TARGET_HEIGHT}:force_original_aspect_ratio=increase,crop={TARGET_WIDTH}:{TARGET_HEIGHT},boxblur=40:5,eq=brightness=-0.35[bg_video]",
+            f"[fg_raw]scale={TARGET_WIDTH}:{VIDEO_AREA_H}:force_original_aspect_ratio=decrease[fg_video]",
+            f"color=c=black:s={TARGET_WIDTH}x{TARGET_HEIGHT}:r={FPS}[base_canvas]",
+            f"[bg_video][fg_video]overlay=(W-w)/2:{VIDEO_START_Y}[video_centered]",
+            f"[base_canvas][video_centered]overlay=0:0[canvas_with_video]"
+        ]
+        base_video_tag = "canvas_with_video"
+
 
     cmd_inputs = [
         "ffmpeg", "-y",
-        "-i", input_video_path,
-        "-i", overlay_image_path
+        "-i", input_video_path
     ]
 
     # --- 비디오 필터 구성 ---
-    if caption_items:
-        filters.append("[canvas_with_video][1:v]overlay=0:0[v_hdr]")
-        last_tag = "v_hdr"
-        for idx, cap in enumerate(caption_items, start=2):
-            cmd_inputs.extend(["-i", cap['image_path']])
-            is_last = (idx == len(caption_items) + 1)
-            next_tag = "v_out" if is_last else f"v_cap{idx}"
-            s = cap.get('start', 0.0)
-            e = cap.get('end', 999.0)
-            filters.append(f"[{last_tag}][{idx}:v]overlay=0:0:enable='between(t,{s},{e})'[{next_tag}]")
-            last_tag = next_tag
+    if is_vertical:
+        # 이미 세로 쇼츠인 경우: 자막과 헤더가 이미 영상 자체에 있으므로 가림 방지를 위해 추가 덧씌움 없이 원본 100% 보존
+        filters.append(f"[{base_video_tag}]null[v_out]")
     else:
-        filters.append("[canvas_with_video][1:v]overlay=0:0[v_out]")
+        cmd_inputs.extend(["-i", overlay_image_path])
+        if caption_items:
+            filters.append(f"[{base_video_tag}][1:v]overlay=0:0[v_hdr]")
+            last_tag = "v_hdr"
+            for idx, cap in enumerate(caption_items, start=2):
+                cmd_inputs.extend(["-i", cap['image_path']])
+                is_last = (idx == len(caption_items) + 1)
+                next_tag = "v_out" if is_last else f"v_cap{idx}"
+                s = cap.get('start', 0.0)
+                e = cap.get('end', 999.0)
+                filters.append(f"[{last_tag}][{idx}:v]overlay=0:0:enable='between(t,{s},{e})'[{next_tag}]")
+                last_tag = next_tag
+        else:
+            filters.append(f"[{base_video_tag}][1:v]overlay=0:0[v_out]")
+
+
 
     # --- 오디오 효과음(SFX) 믹싱 구성 ---
     from config import SFX_DIR
@@ -67,27 +98,25 @@ def render_reels(
     audio_filters = []
     
     # 원본 오디오를 44.1kHz 스테레오로 정규화
-    audio_filters.append("[0:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,volume=1.0[a_base]")
-
-    current_input_idx = cmd_inputs.count("-i")  # 정확한 다음 입력 스트림 인덱스
+    # 원본 오디오를 44.1kHz 스테레오로 정규화
+    audio_filters = []
+    current_input_idx = cmd_inputs.count("-i")
     sfx_count = 0
-    sfx_mix_tags = ["[a_base]"]
+    sfx_mix_tags = []
 
-    if caption_items:
+    if caption_items and not is_vertical:
         for cap in caption_items:
             sfx_name = cap.get('sfx')
             if not sfx_name:
                 continue
             sfx_file = SFX_DIR / f"{sfx_name}.wav"
             if not sfx_file.exists():
-                # pop이나 whoosh 기본 효과음으로 대체
                 sfx_file = SFX_DIR / "pop.wav"
 
             if sfx_file.exists():
                 cmd_inputs.extend(["-i", str(sfx_file)])
                 delay_ms = int(cap.get('start', 0.0) * 1000)
                 sfx_tag = f"a_sfx_{sfx_count}"
-                # 효과음 딜레이 및 볼륨 조절
                 vol = 0.85 if sfx_name in ["whoosh", "pop"] else 0.75
                 audio_filters.append(
                     f"[{current_input_idx}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
@@ -98,12 +127,13 @@ def render_reels(
                 sfx_count += 1
 
     if sfx_count > 0:
-        inputs_str = "".join(sfx_mix_tags)
-        # amix로 원본 오디오와 효과음들을 깔끔하게 합성
+        audio_filters.insert(0, "[0:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,volume=1.0[a_base]")
+        inputs_str = "[a_base]" + "".join(sfx_mix_tags)
         audio_filters.append(f"{inputs_str}amix=inputs={sfx_count+1}:duration=first:dropout_transition=0,volume=1.6[a_out]")
         map_audio = "[a_out]"
     else:
         map_audio = "0:a?"
+
 
     all_filters = filters + audio_filters
     filter_complex_str = ";".join(all_filters)
@@ -134,8 +164,9 @@ def render_reels(
         print("FFmpeg 에러 로그:\n", process.stderr[-1000:])
         raise RuntimeError(f"FFmpeg 인코딩 실패 (exit code {process.returncode})")
 
-    print(f"✓ 렌더링 완료: {output_path}")
+    print(f"[SUCCESS] 렌더링 완료: {output_path}")
     return output_path
+
 
 if __name__ == "__main__":
     print("비디오 에디터 준비 완료")
