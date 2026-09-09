@@ -326,18 +326,19 @@ async def on_ready():
     print("==========================================", flush=True)
     print(f"🤖 릴스 전자동 매니저 봇 온라인! ({bot.user.name})", flush=True)
     try:
-        # 봇이 참여 중인 디스코드 서버들에 즉시 슬래시 커맨드 동기화 (즉시 사용 가능)
+        # 중복 표시 방지: 길드별 로컬 커맨드 중복 제거 (Clear)
         for guild in bot.guilds:
-            bot.tree.copy_global_to(guild=guild)
-            synced = await bot.tree.sync(guild=guild)
-            print(f"✓ [{guild.name}] 슬래시 커맨드 {len(synced)}개 즉시 동기화 완료!", flush=True)
+            bot.tree.clear_commands(guild=guild)
+            await bot.tree.sync(guild=guild)
         
-        # 글로벌 백그라운드 동기화
-        asyncio.create_task(bot.tree.sync())
+        # 글로벌 슬래시 커맨드 1벌만 깔끔하게 동기화
+        synced = await bot.tree.sync()
+        print(f"✓ 디스코드 슬래시 커맨드 {len(synced)}개 단일 등록 동기화 완료!", flush=True)
     except Exception as e:
         print(f"슬래시 커맨드 동기화 안내: {e}", flush=True)
     print("디스코드 슬래시 명령어: /탐색, /수정, /자동켜기, /자동끄기, /무인on, /무인off, /명령어", flush=True)
     print("==========================================", flush=True)
+
 
 
 
