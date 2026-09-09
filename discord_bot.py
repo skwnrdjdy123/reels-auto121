@@ -29,18 +29,94 @@ AUTO_INTERVAL_MINUTES = 60 # 기본 60분 간격
 
 from instagram_uploader import upload_reels_to_instagram
 
+LAST_PROCESSED_VIDEO = {}  # channel_id: {'url': ..., 'id': ..., 'line1': ..., 'line2': ..., 'sub': ...}
+
+class EditModal(discord.ui.Modal, title="🎬 릴스 타이틀 및 텍스트 수정"):
+    line1_input = discord.ui.TextInput(
+        label="상단 1줄 (핑크색 하이라이트)",
+        placeholder="예: 역대급 웃긴 고양이",
+        default="역대급 웃긴 고양이",
+        max_length=30
+    )
+    line2_input = discord.ui.TextInput(
+        label="상단 2줄 (굵은 흰색 메인 타이틀)",
+        placeholder="예: 모먼트 랭킹 TOP5",
+        default="모먼트 랭킹 TOP5",
+        max_length=30
+    )
+    sub_input = discord.ui.TextInput(
+        label="상단 3줄 (괄호 반응 유도 문구)",
+        placeholder="예: (다들 몇 번이 제일 웃김? ㅋㅋㅋ)",
+        default="(다들 몇 번이 제일 웃김? ㅋㅋㅋ)",
+        max_length=40,
+        required=False
+    )
+
+    def __init__(self, video_url: str, video_id: str, channel: discord.TextChannel, orig_line1="", orig_line2="", orig_sub=""):
+        super().__init__()
+        self.video_url = video_url
+        self.video_id = video_id
+        self.channel = channel
+        if orig_line1:
+            self.line1_input.default = orig_line1
+        if orig_line2:
+            self.line2_input.default = orig_line2
+        if orig_sub:
+            self.sub_input.default = orig_sub
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        status_msg = await self.channel.send(
+            f"🛠️ **[재제작 중]** 입력하신 타이틀로 릴스를 다시 편집하고 있습니다...\n"
+            f"- 1줄: `{self.line1_input.value}`\n"
+            f"- 2줄: `{self.line2_input.value}`\n"
+            f"- 서브: `{self.sub_input.value}`"
+        )
+        try:
+            loop = asyncio.get_event_loop()
+            reels_path = await loop.run_in_executor(
+                None,
+                lambda: create_reels_pipeline(
+                    video_url=self.video_url,
+                    line1_text=self.line1_input.value,
+                    line2_text=self.line2_input.value,
+                    sub_text=self.sub_input.value
+                )
+            )
+            filename = Path(reels_path).name
+            view = ReelsApprovalView(
+                reels_filename=filename,
+                video_id=self.video_id,
+                video_url=self.video_url,
+                channel=self.channel,
+                line1=self.line1_input.value,
+                line2=self.line2_input.value,
+                sub=self.sub_input.value
+            )
+            discord_file = discord.File(reels_path, filename=filename)
+            await self.channel.send(
+                content=f"✨ **수정된 릴스가 완성되었습니다!**\n🔗 원본 링크: {self.video_url}\n수정된 영상을 확인해 주세요:",
+                file=discord_file,
+                view=view
+            )
+            await status_msg.delete()
+        except Exception as e:
+            await status_msg.edit(content=f"⚠️ 영상 수정 제작 중 오류 발생: `{str(e)}`")
+
 class ReelsApprovalView(discord.ui.View):
-    def __init__(self, reels_filename: str, video_id: str, channel: discord.TextChannel):
+    def __init__(self, reels_filename: str, video_id: str, video_url: str, channel: discord.TextChannel, line1="", line2="", sub=""):
         super().__init__(timeout=None)
         self.reels_filename = reels_filename
         self.video_id = video_id
+        self.video_url = video_url
         self.channel = channel
+        self.line1 = line1
+        self.line2 = line2
+        self.sub = sub
 
     @discord.ui.button(label="✅ 인스타 업로드 승인", style=discord.ButtonStyle.success)
     async def approve_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # 3초 타임아웃 방지를 위해 즉시 디스코드에 '처리 중' 신호 전송
         await interaction.response.defer()
-
         for child in self.children:
             child.disabled = True
         save_processed_id(self.video_id)
@@ -50,13 +126,13 @@ class ReelsApprovalView(discord.ui.View):
             view=self
         )
 
-        # 인스타그램 업로드 실행
         reels_path = str(OUTPUT_DIR / self.reels_filename)
         try:
             loop = asyncio.get_event_loop()
+            title_text = f"{self.line1} {self.line2}".strip() or "역대급 해외 바이럴 영상"
             res = await loop.run_in_executor(
                 None,
-                lambda: upload_reels_to_instagram(reels_path, title="역대급 해외 바이럴 웃긴 영상")
+                lambda: upload_reels_to_instagram(reels_path, title=title_text)
             )
             await self.channel.send(
                 f"🎉 **인스타그램 릴스 업로드 성공!**\n"
@@ -65,6 +141,18 @@ class ReelsApprovalView(discord.ui.View):
             )
         except Exception as e:
             await self.channel.send(f"⚠️ 인스타그램 업로드 중 오류 발생: `{str(e)}`\n(인스타그램 설정을 확인해 주세요)")
+
+    @discord.ui.button(label="✏️ 자막/제목 직접 수정", style=discord.ButtonStyle.primary)
+    async def edit_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = EditModal(
+            video_url=self.video_url,
+            video_id=self.video_id,
+            channel=self.channel,
+            orig_line1=self.line1,
+            orig_line2=self.line2,
+            orig_sub=self.sub
+        )
+        await interaction.response.send_modal(modal)
 
     @discord.ui.button(label="❌ 반려 / 다른 영상 찾기", style=discord.ButtonStyle.danger)
     async def reject_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -77,6 +165,7 @@ class ReelsApprovalView(discord.ui.View):
             view=self
         )
         await process_auto_reels(self.channel)
+
 
 async def process_auto_reels(channel: discord.TextChannel):
     """
@@ -108,18 +197,32 @@ async def process_auto_reels(channel: discord.TextChannel):
             filename = Path(reels_path).name
             file_size_mb = os.path.getsize(reels_path) / (1024 * 1024)
 
-            if file_size_mb > 25:
-                save_processed_id(found['id'])
-                continue
+            LAST_PROCESSED_VIDEO[channel.id] = {
+                'url': found['url'],
+                'id': found['id'],
+                'line1': found.get('line1', '해외에서 화제 된'),
+                'line2': found.get('line2', '눈길을 사로잡는 순간'),
+                'sub': found.get('sub', '(끝까지 보게 되는 장면)'),
+                'filename': filename
+            }
 
-            view = ReelsApprovalView(reels_filename=filename, video_id=found['id'], channel=channel)
+            view = ReelsApprovalView(
+                reels_filename=filename,
+                video_id=found['id'],
+                video_url=found['url'],
+                channel=channel,
+                line1=found.get('line1', '해외에서 화제 된'),
+                line2=found.get('line2', '눈길을 사로잡는 순간'),
+                sub=found.get('sub', '(끝까지 보게 되는 장면)')
+            )
             discord_file = discord.File(reels_path, filename=filename)
 
             await channel.send(
-                content=f"🔔 **새로운 릴스가 완성되었습니다!**\n🔗 원본 링크: {found['url']}\n영상을 확인하시고 업로드 여부를 결정해 주세요:",
+                content=f"🔔 **새로운 릴스가 완성되었습니다!**\n🔗 원본 링크: {found['url']}\n영상을 확인하시고 업로드 여부를 결정해 주세요 (수정이 필요하면 **[✏️ 자막/제목 직접 수정]** 버튼 클릭!):",
                 file=discord_file,
                 view=view
             )
+
             await status_msg.delete()
             return # 성공 시 종료!
 
@@ -252,6 +355,126 @@ async def cmd_stop_auto(ctx):
         auto_schedule_task.stop()
     await ctx.reply("🛑 정기 자동 탐색이 중지되었습니다.")
 
+@bot.command(name="수정", aliases=["재제작", "편집"])
+
+async def cmd_edit(ctx, *, args: str = ""):
+    """
+    영상을 원하는 제목과 텍스트로 수정하여 다시 제작합니다.
+    사용법:
+      1) !수정 <유튜브링크> [1줄] / [2줄] / [서브문구]
+      2) !수정 [새로운 제목]  (가장 최근 영상에 새 제목 적용)
+    """
+    args = args.strip()
+    channel_id = ctx.channel.id
+    target_url = None
+    line1 = "역대급 해외 바이럴"
+    line2 = "모먼트 랭킹 TOP5"
+    sub = "(다들 몇 번이 제일 웃김? ㅋㅋㅋ)"
+
+    # 1. 링크가 포함되어 있는지 확인
+    words = args.split()
+    if words and (words[0].startswith("http://") or words[0].startswith("https://")):
+        target_url = words[0]
+        remaining_text = " ".join(words[1:])
+    else:
+        # 최근 영상 기록 확인
+        last_info = LAST_PROCESSED_VIDEO.get(channel_id)
+        if last_info:
+            target_url = last_info['url']
+            line1 = last_info.get('line1', line1)
+            line2 = last_info.get('line2', line2)
+            sub = last_info.get('sub', sub)
+            remaining_text = args
+        else:
+            await ctx.reply(
+                "⚠️ 수정할 영상을 찾을 수 없습니다.\n"
+                "사용법: `!수정 <유튜브URL> [1줄제목] / [2줄제목]` 형태로 입력하시거나,\n"
+                "완성된 영상 아래의 **[✏️ 자막/제목 직접 수정]** 버튼을 눌러주세요!"
+            )
+            return
+
+    # 2. 텍스트 분리 처리 (구분자 '/' 지원)
+    if remaining_text:
+        parts = [p.strip() for p in remaining_text.split("/") if p.strip()]
+        if len(parts) >= 3:
+            line1, line2, sub = parts[0], parts[1], parts[2]
+        elif len(parts) == 2:
+            line1, line2 = parts[0], parts[1]
+        elif len(parts) == 1:
+            line2 = parts[0]
+
+    status_msg = await ctx.reply(
+        f"🛠️ **[릴스 재제작 시작]** 영상을 요청하신 설정으로 다시 편집하고 있습니다...\n"
+        f"- 대상 영상: {target_url}\n"
+        f"- 1줄 타이틀: `{line1}`\n"
+        f"- 2줄 타이틀: `{line2}`\n"
+        f"- 서브 훅: `{sub}`\n"
+        f"⏳ 약 15초 소요됩니다."
+    )
+
+    try:
+        loop = asyncio.get_event_loop()
+        reels_path = await loop.run_in_executor(
+            None,
+            lambda: create_reels_pipeline(
+                video_url=target_url,
+                line1_text=line1,
+                line2_text=line2,
+                sub_text=sub
+            )
+        )
+        filename = Path(reels_path).name
+        video_id = Path(target_url).name
+
+        LAST_PROCESSED_VIDEO[channel_id] = {
+            'url': target_url,
+            'id': video_id,
+            'line1': line1,
+            'line2': line2,
+            'sub': sub,
+            'filename': filename
+        }
+
+        view = ReelsApprovalView(
+            reels_filename=filename,
+            video_id=video_id,
+            video_url=target_url,
+            channel=ctx.channel,
+            line1=line1,
+            line2=line2,
+            sub=sub
+        )
+        discord_file = discord.File(reels_path, filename=filename)
+
+        await ctx.reply(
+            content=f"✨ **수정된 릴스가 완성되었습니다!**\n🔗 원본 링크: {target_url}\n마음에 드시면 **[✅ 인스타 업로드 승인]**을 눌러주세요:",
+            file=discord_file,
+            view=view
+        )
+        await status_msg.delete()
+    except Exception as e:
+        await status_msg.edit(content=f"⚠️ 영상 재제작 중 오류 발생: `{str(e)}`")
+
+@bot.command(name="명령어", aliases=["도움말", "help"])
+async def cmd_help(ctx):
+    """사용 가능한 명령어 안내"""
+    help_text = (
+        "📖 **릴스 자동화 봇 사용 가능한 명령어 안내**\n\n"
+        "🔍 **탐색 및 제작**\n"
+        "• `!탐색` 또는 `!자동` : 지금 즉시 인기 랭킹 쇼츠/바이럴 영상을 찾아 릴스 제작\n"
+        "• `https://유튜브링크` : 링크만 채팅에 붙여넣으면 해당 영상으로 즉시 릴스 제작\n\n"
+        "✏️ **영상 수정 및 재제작**\n"
+        "• **버튼 클릭**: 영상 아래 **[✏️ 자막/제목 직접 수정]** 버튼을 누르면 팝업창에서 바로 수정 가능!\n"
+        "• `!수정 [새제목]` : 직전에 만든 영상의 제목을 바꿔서 다시 제작\n"
+        "• `!수정 <유튜브링크> 1줄 / 2줄 / 서브` : 특정 영상을 원하는 텍스트로 지정 제작\n\n"
+        "⏰ **자동 스케줄러 & 무인 모드**\n"
+        "• `!자동켜기 <분>` : N분마다 자동으로 영상을 찾아 디스코드로 배달 (기본 60분)\n"
+        "• `!자동끄기` : 자동 배달 중지\n"
+        "• `!무인on` : 승인 버튼 없이 2시간마다 인스타로 바로 즉시 발행하는 완전 무인 모드\n"
+        "• `!무인off` : 승인 검수 모드로 복귀\n"
+    )
+    await ctx.reply(help_text)
+
 @bot.event
 async def on_message(message: discord.Message):
     if message.author == bot.user:
@@ -275,17 +498,36 @@ async def on_message(message: discord.Message):
             )
 
             filename = Path(reels_path).name
-            view = ReelsApprovalView(reels_filename=filename, video_id="custom", channel=message.channel)
+            video_id = Path(content).name
+            LAST_PROCESSED_VIDEO[message.channel.id] = {
+                'url': content,
+                'id': video_id,
+                'line1': "해외에서 화제 된",
+                'line2': "눈길을 사로잡는 순간",
+                'sub': "(끝까지 보게 되는 장면)",
+                'filename': filename
+            }
+
+            view = ReelsApprovalView(
+                reels_filename=filename,
+                video_id=video_id,
+                video_url=content,
+                channel=message.channel,
+                line1="해외에서 화제 된",
+                line2="눈길을 사로잡는 순간",
+                sub="(끝까지 보게 되는 장면)"
+            )
             discord_file = discord.File(reels_path, filename=filename)
 
             await message.reply(
-                content="✨ **9:16 릴스 제작이 완료되었습니다!**",
+                content="✨ **9:16 릴스 제작이 완료되었습니다!** (수정하시려면 **[✏️ 자막/제목 직접 수정]** 버튼 클릭):",
                 file=discord_file,
                 view=view
             )
             await status_msg.delete()
         except Exception as e:
             await status_msg.edit(content=f"⚠️ 오류 발생: `{str(e)}`")
+
 
 if __name__ == "__main__":
     bot.run(DISCORD_BOT_TOKEN)
