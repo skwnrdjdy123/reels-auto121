@@ -1,12 +1,20 @@
+import sys
+from pathlib import Path
+
+# 프로젝트 루트 경로 추가
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 import os
 import wave
 import numpy as np
 from config import SFX_DIR
 
-def save_wav(filename, samples, sample_rate=44100):
+def save_wav(filepath: Path, samples: np.ndarray, sample_rate: int = 44100):
     samples = np.clip(samples, -1.0, 1.0)
     int_samples = (samples * 32767).astype(np.int16)
-    with wave.open(str(filename), 'w') as w:
+    with wave.open(str(filepath), 'wb') as w:
         w.setnchannels(1)
         w.setsampwidth(2)
         w.setframerate(sample_rate)
@@ -14,171 +22,121 @@ def save_wav(filename, samples, sample_rate=44100):
 
 def ensure_sfx_assets():
     """
-    유튜브 쇼츠 상위 1% 바이럴 채널에서 실제로 쓰이는
-    고타격감, 선명한 어택감, 리얼한 음질의 10대 핵심 효과음 생성
+    유튜브 쇼츠 / 틱톡 최상위 예능 및 밈(Meme) 채널에서 필수적으로 쓰이는
+    초고타격감 12종 시그니처 효과음 생성:
+    - 퍽! (Punch / Hit)
+    - 띠용~ (Boing / Spring)
+    - 찰싹! (Slap / Smack)
+    - 윈도우 에러 (Windows Error)
+    - 관객 폭소 (Crowd Laugh)
+    - 슉! (Whoosh)
+    - 퐁! (Pop)
+    - 띵! (Ding)
+    - 삐익- (Buzzer)
+    - 쿵/폭발 (Boom)
+    - 찌익- (Scratch)
+    - 지지직 (Glitch)
     """
     SFX_DIR.mkdir(exist_ok=True)
     sr = 44100
 
-    # 1. whoosh.wav (시선 집중 슉! 빠른 에어 스윕)
-    f_whoosh = SFX_DIR / 'whoosh.wav'
-    t_w = np.linspace(0, 0.25, int(sr * 0.25), endpoint=False)
-    noise = np.random.normal(0, 0.7, len(t_w))
-    sweep = np.sin(2 * np.pi * (180 + 1400 * (t_w / 0.25)**2.2) * t_w)
-    env_w = (np.sin(np.pi * t_w / 0.25) ** 2.5) * 1.8
-    whoosh = (0.45 * noise + 0.75 * sweep) * env_w
-    save_wav(f_whoosh, whoosh)
+    # 1. whoosh.wav (빠른 시선 전환 에어 스윕)
+    t = np.linspace(0, 0.22, int(sr * 0.22), endpoint=False)
+    noise = np.random.normal(0, 0.7, len(t))
+    sweep = np.sin(2 * np.pi * (160 + 1500 * (t / 0.22)**2.2) * t)
+    env = (np.sin(np.pi * t / 0.22) ** 2.5) * 1.8
+    save_wav(SFX_DIR / 'whoosh.wav', (0.45 * noise + 0.75 * sweep) * env)
 
-    # 2. pop.wav (쨍하고 찰진 '퐁!' 버블 어택)
-    f_pop = SFX_DIR / 'pop.wav'
-    t_p = np.linspace(0, 0.12, int(sr * 0.12), endpoint=False)
-    freq_p = 450 + 1200 * np.exp(-t_p * 50)
-    harmonics = (
-        np.sin(2 * np.pi * freq_p * t_p) * 0.9 +
-        np.sin(2 * np.pi * (freq_p * 2) * t_p) * 0.4
-    )
-    pop = harmonics * np.exp(-t_p * 35) * 1.9
-    save_wav(f_pop, pop)
-
-    # 3. ding.wav (성공/정답/감탄 맑고 쨍한 '띵!' 호텔 벨 차임)
-    f_ding = SFX_DIR / 'ding.wav'
-    t_d = np.linspace(0, 0.55, int(sr * 0.55), endpoint=False)
-    bell = (
-        np.sin(2 * np.pi * 2349 * t_d) * 0.7 +   # D7
-        np.sin(2 * np.pi * 4698 * t_d) * 0.4 +   # D8
-        np.sin(2 * np.pi * 1174 * t_d) * 0.25    # D6
-    ) * np.exp(-t_d * 7.0) * 1.8
-    save_wav(f_ding, bell)
-
-    # 4. bonk.wav (웃긴 퍽! 뿅망치 타격감 극대화)
-    f_bonk = SFX_DIR / 'bonk.wav'
-    t_k = np.linspace(0, 0.20, int(sr * 0.20), endpoint=False)
-    freq_k = 650 * np.exp(-t_k * 30) + 120
-    thump = np.sin(2 * np.pi * freq_k * t_k) * 0.95 + np.sin(2 * np.pi * (freq_k * 1.6) * t_k) * 0.4
-    bonk = thump * np.exp(-t_k * 25) * 2.0
-    save_wav(f_bonk, bonk)
-
-    # 5. boing.wav (만화 띠용~ 반동 용수철)
-    f_boing = SFX_DIR / 'boing.wav'
-    t_bg = np.linspace(0, 0.40, int(sr * 0.40), endpoint=False)
-    vibrato = np.sin(2 * np.pi * 28 * t_bg) * 160
-    base_freq = np.linspace(280, 620, len(t_bg)) + vibrato
-    phase = np.cumsum(2 * np.pi * base_freq / sr)
-    boing = np.sin(phase) * np.exp(-t_bg * 6.0) * 1.8
-    save_wav(f_boing, boing)
-
-    # 6. camera.wav (리얼 DSLR 셔터 찰칵!)
-    f_cam = SFX_DIR / 'camera.wav'
-    t_c = np.linspace(0, 0.18, int(sr * 0.18), endpoint=False)
-    click1 = np.random.normal(0, 0.8, len(t_c)) * np.exp(-t_c * 90)
-    delay_click2 = int(0.065 * sr)
-    click2 = np.zeros_like(t_c)
-    if delay_click2 < len(t_c):
-        t_sub = t_c[:-delay_click2]
-        click2[delay_click2:] = np.random.normal(0, 1.0, len(t_sub)) * np.exp(-t_sub * 80)
-    cam = (click1 * 0.8 + click2 * 1.0) * 1.8
-    save_wav(f_cam, cam)
-
-    # 7. scratch.wav (레코드 찌익- 반전 멈춤)
-    f_scr = SFX_DIR / 'scratch.wav'
-    t_s = np.linspace(0, 0.30, int(sr * 0.30), endpoint=False)
-    scr_freq = 750 + 500 * np.sin(2 * np.pi * 18 * t_s)
-    scr_phase = np.cumsum(2 * np.pi * scr_freq / sr)
-    scr_noise = np.random.normal(0, 0.6, len(t_s))
-    scratch = (np.sin(scr_phase) * 0.6 + scr_noise * 0.5) * np.sin(np.pi * t_s / 0.30) * 1.9
-    save_wav(f_scr, scratch)
-
-    # 8. buzzer.wav (오답/황당/탈락 삐익- 날카로운 톱니파)
-    f_buz = SFX_DIR / 'buzzer.wav'
-    t_bz = np.linspace(0, 0.28, int(sr * 0.28), endpoint=False)
-    # 톱니파 합성을 통한 리얼 버저음
-    buzz = (
-        np.sin(2 * np.pi * 180 * t_bz) * 0.6 +
-        np.sin(2 * np.pi * 360 * t_bz) * 0.4 +
-        np.sin(2 * np.pi * 540 * t_bz) * 0.3 +
-        np.sin(2 * np.pi * 720 * t_bz) * 0.2
-    ) * np.exp(-t_bz * 4.5) * 1.8
-    save_wav(f_buz, buzzer=buzz)
-
-def save_wav(filename, samples, sample_rate=44100, buzzer=None):
-    if buzzer is not None:
-        samples = buzzer
-    samples = np.clip(samples, -1.0, 1.0)
-    int_samples = (samples * 32767).astype(np.int16)
-    with wave.open(str(filename), 'w') as w:
-        w.setnchannels(1)
-        w.setsampwidth(2)
-        w.setframerate(sample_rate)
-        w.writeframes(int_samples.tobytes())
-
-def ensure_sfx_assets():
-    SFX_DIR.mkdir(exist_ok=True)
-    sr = 44100
-
-    # 1. whoosh.wav
-    t_w = np.linspace(0, 0.25, int(sr * 0.25), endpoint=False)
-    noise = np.random.normal(0, 0.7, len(t_w))
-    sweep = np.sin(2 * np.pi * (180 + 1400 * (t_w / 0.25)**2.2) * t_w)
-    env_w = (np.sin(np.pi * t_w / 0.25) ** 2.5) * 1.8
-    save_wav(SFX_DIR / 'whoosh.wav', (0.45 * noise + 0.75 * sweep) * env_w)
-
-    # 2. pop.wav
-    t_p = np.linspace(0, 0.12, int(sr * 0.12), endpoint=False)
-    freq_p = 450 + 1200 * np.exp(-t_p * 50)
-    pop = (np.sin(2 * np.pi * freq_p * t_p) * 0.9 + np.sin(2 * np.pi * (freq_p * 2) * t_p) * 0.4) * np.exp(-t_p * 35) * 1.9
+    # 2. pop.wav (통통 튀는 퐁! 팝업 효과음)
+    t = np.linspace(0, 0.11, int(sr * 0.11), endpoint=False)
+    freq = 480 + 1300 * np.exp(-t * 55)
+    pop = (np.sin(2 * np.pi * freq * t) * 0.9 + np.sin(2 * np.pi * (freq * 2) * t) * 0.4) * np.exp(-t * 40) * 1.9
     save_wav(SFX_DIR / 'pop.wav', pop)
 
-    # 3. ding.wav
-    t_d = np.linspace(0, 0.55, int(sr * 0.55), endpoint=False)
-    bell = (np.sin(2 * np.pi * 2349 * t_d) * 0.7 + np.sin(2 * np.pi * 4698 * t_d) * 0.4 + np.sin(2 * np.pi * 1174 * t_d) * 0.25) * np.exp(-t_d * 7.0) * 1.8
+    # 3. ding.wav (맑고 쨍한 띵!)
+    t = np.linspace(0, 0.50, int(sr * 0.50), endpoint=False)
+    bell = (np.sin(2 * np.pi * 2349 * t) * 0.7 + np.sin(2 * np.pi * 4698 * t) * 0.4 + np.sin(2 * np.pi * 1174 * t) * 0.25) * np.exp(-t * 7.5) * 1.8
     save_wav(SFX_DIR / 'ding.wav', bell)
 
-    # 4. bonk.wav
-    t_k = np.linspace(0, 0.20, int(sr * 0.20), endpoint=False)
-    freq_k = 650 * np.exp(-t_k * 30) + 120
-    bonk = (np.sin(2 * np.pi * freq_k * t_k) * 0.95 + np.sin(2 * np.pi * (freq_k * 1.6) * t_k) * 0.4) * np.exp(-t_k * 25) * 2.0
-    save_wav(SFX_DIR / 'bonk.wav', bonk)
+    # 4. bonk.wav / punch.wav (묵직한 퍽! 타격음)
+    t = np.linspace(0, 0.22, int(sr * 0.22), endpoint=False)
+    freq = 650 * np.exp(-t * 32) + 90
+    impact_noise = np.random.normal(0, 0.8, len(t)) * np.exp(-t * 60)
+    sub_bass = np.sin(2 * np.pi * freq * t) * 1.2
+    punch = (sub_bass + impact_noise * 0.7) * np.exp(-t * 22) * 1.9
+    save_wav(SFX_DIR / 'bonk.wav', punch)
+    save_wav(SFX_DIR / 'punch.wav', punch)
 
-    # 5. boing.wav
-    t_bg = np.linspace(0, 0.40, int(sr * 0.40), endpoint=False)
-    vibrato = np.sin(2 * np.pi * 28 * t_bg) * 160
-    base_freq = np.linspace(280, 620, len(t_bg)) + vibrato
-    boing = np.sin(np.cumsum(2 * np.pi * base_freq / sr)) * np.exp(-t_bg * 6.0) * 1.8
+    # 5. boing.wav (만화 띠용~ 반동 스프링)
+    t = np.linspace(0, 0.42, int(sr * 0.42), endpoint=False)
+    vibrato = np.sin(2 * np.pi * 26 * t) * 170
+    base_freq = np.linspace(260, 680, len(t)) + vibrato
+    boing = np.sin(np.cumsum(2 * np.pi * base_freq / sr)) * np.exp(-t * 5.5) * 1.8
     save_wav(SFX_DIR / 'boing.wav', boing)
 
-    # 6. camera.wav
-    t_c = np.linspace(0, 0.18, int(sr * 0.18), endpoint=False)
-    click1 = np.random.normal(0, 0.8, len(t_c)) * np.exp(-t_c * 90)
+    # 6. slap.wav (찰싹! 뺨/물건 때리는 찰진 손맛 타격음)
+    t = np.linspace(0, 0.16, int(sr * 0.16), endpoint=False)
+    crack_noise = np.random.normal(0, 1.2, len(t)) * np.exp(-t * 70)
+    tonal = np.sin(2 * np.pi * 1200 * np.exp(-t * 40) * t) * 0.7
+    slap = (crack_noise + tonal) * np.exp(-t * 30) * 1.9
+    save_wav(SFX_DIR / 'slap.wav', slap)
+
+    # 7. windows_error.wav (윈도우 에러 사운드 빰! 황당/뇌정지)
+    t = np.linspace(0, 0.35, int(sr * 0.35), endpoint=False)
+    chord = (
+        np.sin(2 * np.pi * 740 * t) * 0.6 +    # F#5
+        np.sin(2 * np.pi * 1108 * t) * 0.5 +   # C#6
+        np.sin(2 * np.pi * 1480 * t) * 0.3     # F#6
+    ) * np.exp(-t * 8.0) * 1.9
+    save_wav(SFX_DIR / 'windows_error.wav', chord)
+
+    # 8. laugh.wav (관객 폭소/웃음소리 하하하!)
+    t = np.linspace(0, 0.65, int(sr * 0.65), endpoint=False)
+    # 5개의 웃음 펄스 (하-하-하-하-하)
+    laugh_pulse = np.zeros_like(t)
+    for p_idx, p_time in enumerate([0.02, 0.14, 0.26, 0.38, 0.50]):
+        center = int(p_time * sr)
+        width = int(0.06 * sr)
+        start = max(0, center - width)
+        end = min(len(t), center + width)
+        w_t = t[start:end] - p_time
+        laugh_voice = (np.sin(2 * np.pi * 380 * w_t) * 0.6 + np.sin(2 * np.pi * 760 * w_t) * 0.4)
+        laugh_pulse[start:end] += laugh_voice * np.exp(-(w_t * 50)**2) * (1.0 - p_idx * 0.12)
+    save_wav(SFX_DIR / 'laugh.wav', laugh_pulse * 1.8)
+
+    # 9. camera.wav (찰칵! 순간포착 셔터)
+    t = np.linspace(0, 0.18, int(sr * 0.18), endpoint=False)
+    click1 = np.random.normal(0, 0.8, len(t)) * np.exp(-t * 90)
     delay_click2 = int(0.065 * sr)
-    click2 = np.zeros_like(t_c)
-    if delay_click2 < len(t_c):
-        t_sub = t_c[:-delay_click2]
+    click2 = np.zeros_like(t)
+    if delay_click2 < len(t):
+        t_sub = t[:-delay_click2]
         click2[delay_click2:] = np.random.normal(0, 1.0, len(t_sub)) * np.exp(-t_sub * 80)
     save_wav(SFX_DIR / 'camera.wav', (click1 * 0.8 + click2 * 1.0) * 1.8)
 
-    # 7. scratch.wav
-    t_s = np.linspace(0, 0.30, int(sr * 0.30), endpoint=False)
-    scr_freq = 750 + 500 * np.sin(2 * np.pi * 18 * t_s)
-    scratch = (np.sin(np.cumsum(2 * np.pi * scr_freq / sr)) * 0.6 + np.random.normal(0, 0.6, len(t_s)) * 0.5) * np.sin(np.pi * t_s / 0.30) * 1.9
-    save_wav(SFX_DIR / 'scratch.wav', scratch)
-
-    # 8. buzzer.wav
-    t_bz = np.linspace(0, 0.28, int(sr * 0.28), endpoint=False)
-    buzz = (np.sin(2 * np.pi * 180 * t_bz) * 0.6 + np.sin(2 * np.pi * 360 * t_bz) * 0.4 + np.sin(2 * np.pi * 540 * t_bz) * 0.3 + np.sin(2 * np.pi * 720 * t_bz) * 0.2) * np.exp(-t_bz * 4.5) * 1.8
+    # 10. buzzer.wav (황당/오답 삐익-)
+    t = np.linspace(0, 0.28, int(sr * 0.28), endpoint=False)
+    buzz = (np.sin(2 * np.pi * 180 * t) * 0.6 + np.sin(2 * np.pi * 360 * t) * 0.4 + np.sin(2 * np.pi * 540 * t) * 0.3) * np.exp(-t * 4.5) * 1.8
     save_wav(SFX_DIR / 'buzzer.wav', buzz)
 
-    # 9. boom.wav (묵직한 초저역 서브베이스 쿵!)
-    t_b = np.linspace(0, 0.65, int(sr * 0.65), endpoint=False)
-    sub_bass = np.sin(2 * np.pi * (140 * np.exp(-t_b * 8) + 42) * t_b)
-    boom = (sub_bass * 0.95 + np.random.normal(0, 0.2, len(t_b))) * np.exp(-t_b * 4.0) * 1.9
+    # 11. boom.wav (쿵! 폭발/대참사)
+    t = np.linspace(0, 0.55, int(sr * 0.55), endpoint=False)
+    sub = np.sin(2 * np.pi * (140 * np.exp(-t * 8) + 40) * t) * 1.2
+    exp_noise = np.random.normal(0, 0.9, len(t)) * np.exp(-t * 12)
+    boom = (sub + exp_noise * 0.6) * np.exp(-t * 5.0) * 1.9
     save_wav(SFX_DIR / 'boom.wav', boom)
 
-    # 10. glitch.wav (디지털 찌릿 뇌정지)
-    t_g = np.linspace(0, 0.22, int(sr * 0.22), endpoint=False)
-    pulse = np.sign(np.sin(2 * np.pi * 950 * t_g)) * (np.random.uniform(0, 1, len(t_g)) > 0.35)
-    glitch = (pulse * 0.7 + np.random.normal(0, 0.4, len(t_g))) * np.exp(-t_g * 11) * 1.8
-    save_wav(SFX_DIR / 'glitch.wav', glitch)
+    # 12. glitch.wav (지지직 멘붕)
+    t = np.linspace(0, 0.22, int(sr * 0.22), endpoint=False)
+    glitch_noise = np.random.uniform(-1, 1, len(t)) * (np.sin(2 * np.pi * 90 * t) > 0)
+    save_wav(SFX_DIR / 'glitch.wav', glitch_noise * np.exp(-t * 8.0) * 1.6)
 
-if __name__ == '__main__':
+    # 13. scratch.wav (레코드 찌익-)
+    t = np.linspace(0, 0.28, int(sr * 0.28), endpoint=False)
+    scr_freq = 750 + 500 * np.sin(2 * np.pi * 18 * t)
+    scr = (np.sin(np.cumsum(2 * np.pi * scr_freq / sr)) * 0.6 + np.random.normal(0, 0.5, len(t)) * 0.4) * np.sin(np.pi * t / 0.28) * 1.9
+    save_wav(SFX_DIR / 'scratch.wav', scr)
+
+if __name__ == "__main__":
     ensure_sfx_assets()
-    print('All high-punch SFX created.')
+    print("모든 예능 밈 효과음 생성 완료!")
