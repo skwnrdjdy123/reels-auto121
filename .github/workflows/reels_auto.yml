@@ -31,6 +31,8 @@ jobs:
 
       - name: 5. 릴스 자동 탐색 및 디스코드 배달 실행
         env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           python auto_delivery.py
