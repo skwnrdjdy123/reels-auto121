@@ -112,6 +112,103 @@ def detect_audio_peaks(video_path: str, min_distance_sec: float = 1.2) -> list[d
         print(f"오디오 피크 감지 실패: {e}")
         return []
 
+def analyze_scenes_and_impacts(video_path: str, duration: float) -> list[dict]:
+    """
+    영상의 실제 씬(클립) 전환점과 각 씬 내부에서
+    망치 타격, 손 맞음, 넘어짐, 실수 등 '사건이 터지는 정확한 0.1초 타격 순간(Impact)'을 산출합니다.
+    """
+    try:
+        # 1. FFmpeg Scene Detection (씬 전환점 감지)
+        cmd_scenes = [
+            'ffmpeg', '-i', video_path,
+            '-filter_complex', 'select=\'gt(scene,0.28)\',metadata=print:file=-',
+            '-f', 'null', '-'
+        ]
+        res = subprocess.run(cmd_scenes, stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+        raw_cuts = [0.0]
+        for line in res.stdout.splitlines() + res.stderr.splitlines():
+            if 'pts_time:' in line:
+                try:
+                    t = float(line.split('pts_time:')[1].strip())
+                    if t - raw_cuts[-1] >= 1.8 and t < duration - 1.0:
+                        raw_cuts.append(round(t, 2))
+                except Exception:
+                    pass
+        if duration not in raw_cuts:
+            raw_cuts.append(round(duration, 2))
+
+        # 컷이 너무 없으면 4~6초 단위로 자연스럽게 분할
+        if len(raw_cuts) <= 2 and duration >= 8.0:
+            step = 5.0
+            raw_cuts = [0.0]
+            curr = step
+            while curr < duration - 1.5:
+                raw_cuts.append(round(curr, 2))
+                curr += step
+            raw_cuts.append(round(duration, 2))
+
+        # 2. 오디오 f32le 덤프로 20ms 단위 정밀 RMS 파형 분석
+        raw_audio = str(TEMP_DIR / f"temp_scene_audio_{Path(video_path).stem}.raw")
+        subprocess.run([
+            'ffmpeg', '-y', '-i', video_path, '-vn', '-ac', '1', '-ar', '16000', '-f', 'f32le', raw_audio
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        
+        data = np.fromfile(raw_audio, dtype=np.float32)
+        try:
+            os.remove(raw_audio)
+        except Exception:
+            pass
+
+        win = 320  # 20ms at 16kHz
+        num_wins = len(data) // win
+        rms_arr = np.sqrt(np.mean(data[:num_wins*win].reshape((num_wins, win))**2, axis=1)) if num_wins > 0 else np.array([])
+
+        clips = []
+        for i in range(len(raw_cuts) - 1):
+            s = raw_cuts[i]
+            e = raw_cuts[i + 1]
+            clip_dur = e - s
+            if clip_dur < 1.2:
+                continue
+
+            # 해당 클립 내의 피크(타격/충격 순간) 탐색
+            idx_s = int(s * 50)
+            idx_e = min(len(rms_arr), int(e * 50))
+            clip_rms = rms_arr[idx_s:idx_e] if len(rms_arr) > 0 else []
+
+            t_impact = None
+            if len(clip_rms) > 10:
+                # 클립 시작 0.5초 이후의 최대 에너지 지점 탐색
+                safe_start_idx = int(min(len(clip_rms) * 0.2, 50 * 0.8))
+                sub_rms = clip_rms[safe_start_idx:]
+                if len(sub_rms) > 0:
+                    sub_max_idx = np.argmax(sub_rms)
+                    t_impact = round(s + (safe_start_idx + sub_max_idx) * 0.02, 2)
+
+            # 피크를 못 찾았거나 범위 밖이면 클립의 55% 지점을 타격 순간으로 배정
+            if t_impact is None or (t_impact - s < 0.6) or (e - t_impact < 0.35):
+                t_impact = round(s + clip_dur * 0.55, 2)
+
+            clips.append({
+                'clip_idx': len(clips) + 1,
+                'start': s,
+                'end': e,
+                'impact': t_impact
+            })
+
+        print(f"🎬 [클립 정밀 분석 완료] 총 {len(clips)}개 씬 감지 및 타격 순간 도출:", flush=True)
+        for c in clips:
+            print(f"   - 클립 {c['clip_idx']}: {c['start']:>4.1f}s ~ {c['end']:>4.1f}s | 타격 순간: {c['impact']:>4.2f}s", flush=True)
+
+        return clips
+    except Exception as e:
+        print(f"씬 및 타격 분석 실패: {e}")
+        # 폴백 분할
+        return [
+            {'clip_idx': 1, 'start': 0.0, 'end': round(duration * 0.5, 2), 'impact': round(duration * 0.25, 2)},
+            {'clip_idx': 2, 'start': round(duration * 0.5, 2), 'end': duration, 'impact': round(duration * 0.75, 2)}
+        ]
+
 def analyze_video_highlights(video_path: str, duration: float) -> dict:
     """
     영상 컷과 오디오 피크를 종합 분석하여
@@ -129,3 +226,4 @@ def analyze_video_highlights(video_path: str, duration: float) -> dict:
         "peaks": peak_times,
         "duration": duration
     }
+

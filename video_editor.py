@@ -9,7 +9,8 @@ def render_reels(
     caption_items: list[dict] = None,
     output_filename: str = None,
     sfx_events: list[dict] = None,
-    highlight_peak: float = None
+    highlight_peak: float = None,
+    impact_moments: list[float] = None
 ) -> str:
     """
     유튜브 쇼츠 / 틱톡 최상위 예능 및 밈(Meme) 스타일 릴스 렌더링 엔진:
@@ -43,19 +44,29 @@ def render_reels(
     except Exception as e:
         print(f"해상도 측정 실패: {e}")
 
-    # 하이라이트 순간 펀치 줌(Punch Zoom) & 셰이크(Camera Shake) 필터 수식 구성
-    punch_zoom_filter = ""
-    if highlight_peak and highlight_peak > 0.5:
+    # 하이라이트/타격 순간 펀치 줌(Punch Zoom) & 셰이크(Camera Shake) 필터 수식 구성
+    zoom_conditions = []
+    if impact_moments:
+        for m in impact_moments:
+            if m > 0.4:
+                p_s = round(m, 2)
+                p_e = round(m + 0.42, 2)
+                zoom_conditions.append(f"between(t,{p_s},{p_e})")
+    elif highlight_peak and highlight_peak > 0.4:
         p_s = round(highlight_peak, 2)
-        p_e = round(highlight_peak + 0.45, 2)
-        # 피크 순간에 1.22배 확대 및 미세 흔들림
+        p_e = round(highlight_peak + 0.42, 2)
+        zoom_conditions.append(f"between(t,{p_s},{p_e})")
+
+    punch_zoom_filter = ""
+    if zoom_conditions:
+        any_zoom = "+".join(zoom_conditions)
         punch_zoom_filter = (
-            f",crop=w='if(between(t,{p_s},{p_e}),in_w/1.22,in_w)':"
-            f"h='if(between(t,{p_s},{p_e}),in_h/1.22,in_h)':"
-            f"x='(in_w-out_w)/2 + if(between(t,{p_s},{p_e}),sin(t*60)*6,0)':"
-            f"y='(in_h-out_h)/2 + if(between(t,{p_s},{p_e}),cos(t*60)*6,0)'"
+            f",crop=w='if({any_zoom},in_w/1.24,in_w)':"
+            f"h='if({any_zoom},in_h/1.24,in_h)':"
+            f"x='(in_w-out_w)/2 + if({any_zoom},sin(t*55)*8,0)':"
+            f"y='(in_h-out_h)/2 + if({any_zoom},cos(t*55)*8,0)'"
         )
-        print(f"🎬 [화면 연출] {p_s}초 ~ {p_e}초 구간 순간 줌인(Punch Zoom) & 흔들림(Shake) 장착!", flush=True)
+        print(f"🎬 [화면 모션 연출] 총 {len(zoom_conditions)}개 타격 순간에 1.24배 순간 줌인(Punch Zoom) & 흔들림(Shake) 장착!", flush=True)
 
     if is_vertical:
         # 이미 세로 쇼츠인 경우

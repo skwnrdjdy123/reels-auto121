@@ -73,10 +73,12 @@ def create_reels_pipeline(
         scene_captions = adaptive_result.get("captions", [])
         sfx_events = adaptive_result.get("sfx_events", [])
         highlight_peak = adaptive_result.get("main_peak_time")
+        impact_moments = adaptive_result.get("impact_moments", [])
     else:
         scene_captions = adaptive_result
         sfx_events = []
         highlight_peak = None
+        impact_moments = []
 
     caption_items = []
     for idx, sc in enumerate(scene_captions):
@@ -98,6 +100,7 @@ def create_reels_pipeline(
         caption_items=caption_items,
         sfx_events=sfx_events,
         highlight_peak=highlight_peak,
+        impact_moments=impact_moments,
         output_filename=f"ranking_reels_{video_info['id']}.mp4"
     )
 
