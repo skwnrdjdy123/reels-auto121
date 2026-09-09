@@ -14,9 +14,13 @@ TARGET_WIDTH = 1080
 TARGET_HEIGHT = 1920
 FPS = 30
 
-# 폰트 경로 (프로젝트 내장 무료 나눔고딕 볼드 우선 사용)
+# 폰트 경로 (숏폼 랭킹 전용 초굵은 검은고딕 폰트)
+BLACK_HAN_FONT = BASE_DIR / "fonts" / "BlackHanSans-Regular.ttf"
 BUNDLE_FONT_PATH = BASE_DIR / "fonts" / "NanumGothic-Bold.ttf"
-if BUNDLE_FONT_PATH.exists():
+
+if BLACK_HAN_FONT.exists():
+    DEFAULT_FONT_PATH = str(BLACK_HAN_FONT)
+elif BUNDLE_FONT_PATH.exists():
     DEFAULT_FONT_PATH = str(BUNDLE_FONT_PATH)
 elif os.path.exists(r"C:\Windows\Fonts\malgunbd.ttf"):
     DEFAULT_FONT_PATH = r"C:\Windows\Fonts\malgunbd.ttf"

@@ -70,16 +70,25 @@ def generate_korean_hook(english_title: str) -> tuple[str, str]:
     except Exception:
         translated = clean_title[:20]
 
-    hook_patterns = [
-        f"외국에서 난리 난 {translated} ㅋㅋㅋ",
-        f"실시간 해외 떡상 중인 {translated}",
-        f"조회수 폭발한 {translated} ㅋㅋㅋ",
-        f"{translated} 실화냐 ㅋㅋㅋ"
+    # 랭킹 스타일 문구 분리
+    line1_options = [
+        "역대급 웃긴 순간",
+        "역대급 해외 바이럴",
+        "역대급 레전드 모먼트",
+        "실시간 떡상 중인",
+        "해외에서 난리 난"
     ]
-    top_title = random.choice(hook_patterns)
-    bottom_text = random.choice(REACTION_PHRASES)
+    line1_text = random.choice(line1_options)
+    line2_text = f"{translated[:14]} 모먼트" if len(translated) > 4 else "모먼트 랭킹 TOP5"
+    sub_text = random.choice([
+        "(다들 몇 번이 제일 웃김? ㅋㅋㅋ)",
+        "(마지막 결말 실화냐고 ㅋㅋㅋ)",
+        "(웃참 실패하면 팔로우 ㅋㅋㅋ)",
+        "(댓글 반응 폭발함 ㅋㅋㅋ)"
+    ])
+    bottom_caption = random.choice(REACTION_PHRASES)
 
-    return top_title, bottom_text
+    return line1_text, line2_text, sub_text, bottom_caption
 
 def find_viral_video() -> dict:
     """
@@ -110,7 +119,6 @@ def find_viral_video() -> dict:
                     continue
 
                 v_duration = entry.get('duration')
-                # 60초 초과 영상 제외 (쇼츠는 최대 60초)
                 if v_duration and v_duration > 65:
                     continue
 
@@ -118,14 +126,19 @@ def find_viral_video() -> dict:
                 v_title = entry.get('title', 'Viral Short')
 
                 print(f"🎯 신규 바이럴 영상 발견: {v_title} ({v_url})")
-                top_title, bottom_text = generate_korean_hook(v_title)
+                line1, line2, sub, caption = generate_korean_hook(v_title)
 
                 return {
                     'id': v_id,
                     'url': v_url,
                     'orig_title': v_title,
-                    'top_title': top_title,
-                    'bottom_text': bottom_text
+                    'line1': line1,
+                    'line2': line2,
+                    'sub': sub,
+                    'caption': caption,
+                    # 기존 호환용
+                    'top_title': f"{line1} {line2}",
+                    'bottom_text': caption
                 }
 
     raise RuntimeError("새로운 바이럴 영상을 찾지 못했습니다. 잠시 후 다시 시도해 주세요.")
