@@ -323,22 +323,23 @@ async def cmd_direct_off(ctx):
 
 @bot.event
 async def on_ready():
-    print("==========================================")
-    print(f"🤖 릴스 전자동 매니저 봇 온라인! ({bot.user.name})")
+    print("==========================================", flush=True)
+    print(f"🤖 릴스 전자동 매니저 봇 온라인! ({bot.user.name})", flush=True)
     try:
-        synced = await bot.tree.sync()
-        print(f"✓ 디스코드 슬래시 커맨드 {len(synced)}개 서버 동기화 완료!")
+        # 봇이 참여 중인 디스코드 서버들에 즉시 슬래시 커맨드 동기화 (즉시 사용 가능)
+        for guild in bot.guilds:
+            bot.tree.copy_global_to(guild=guild)
+            synced = await bot.tree.sync(guild=guild)
+            print(f"✓ [{guild.name}] 슬래시 커맨드 {len(synced)}개 즉시 동기화 완료!", flush=True)
+        
+        # 글로벌 백그라운드 동기화
+        asyncio.create_task(bot.tree.sync())
     except Exception as e:
-        print(f"슬래시 커맨드 동기화 실패: {e}")
-    print("디스코드 슬래시 명령어:")
-    print("  /탐색    : 인기 영상 즉시 탐색 및 릴스 제작")
-    print("  /수정    : 영상 제목/문구 수정 후 재제작")
-    print("  /자동켜기: 정기 자동 릴스 탐색 및 배달 시작")
-    print("  /자동끄기: 정기 자동 탐색 중지")
-    print("  /무인on  : 승인 없는 인스타 즉시 직행 모드")
-    print("  /무인off : 승인 검수 모드로 복귀")
-    print("  /명령어  : 전체 도움말 확인")
-    print("==========================================")
+        print(f"슬래시 커맨드 동기화 안내: {e}", flush=True)
+    print("디스코드 슬래시 명령어: /탐색, /수정, /자동켜기, /자동끄기, /무인on, /무인off, /명령어", flush=True)
+    print("==========================================", flush=True)
+
+
 
 # ==========================================
 # 🚀 슬래시 커맨드 (Slash Commands: /명령어)
