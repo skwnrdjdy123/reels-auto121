@@ -21,23 +21,24 @@ def render_reels(
     
     output_path = str(OUTPUT_DIR / output_filename)
 
-    # 비디오 영역: 너비 1080, 높이 1440 (Y: 480 ~ 1920)
-    VIDEO_AREA_H = 1440
-    VIDEO_START_Y = 480
+    # 인스타그램 릴스 Safe Zone 최적화 비디오 영역
+    # 상단 헤더 400px 제외한 Y: 400 ~ 1920 (높이 1520)
+    VIDEO_AREA_H = 1520
+    VIDEO_START_Y = 400
 
     filter_complex = (
-        # 1. 배경용 영상: 1080x1440으로 채우고 블러 처리
+        # 1. 배경용 영상: 1080x1520으로 채우고 부드러운 가우시안 블러 처리
         "[0:v]split=2[bg_raw][fg_raw];"
         f"[bg_raw]scale={TARGET_WIDTH}:{VIDEO_AREA_H}:force_original_aspect_ratio=increase,"
-        f"crop={TARGET_WIDTH}:{VIDEO_AREA_H},boxblur=25:5,eq=brightness=-0.15[bg_video];"
-        # 2. 전경 영상: 1080x1440 영역 내에 비율 유지하며 축소
+        f"crop={TARGET_WIDTH}:{VIDEO_AREA_H},boxblur=30:5,eq=brightness=-0.18[bg_video];"
+        # 2. 전경 영상: 1080x1520 영역 내에 비율 완벽 유지하며 중앙 배치
         f"[fg_raw]scale={TARGET_WIDTH}:{VIDEO_AREA_H}:force_original_aspect_ratio=decrease[fg_video];"
-        # 3. 배경 위에 전경을 중앙 오버레이
+        # 3. 배경 위에 전경을 정중앙 오버레이
         f"[bg_video][fg_video]overlay=(W-w)/2:(H-h)/2[video_merged];"
-        # 4. 전체 1080x1920 블랙 캔버스에 비디오를 Y=480 위치에 올림
+        # 4. 전체 1080x1920 블랙 캔버스에 비디오를 Y=400 위치에 올림
         f"color=c=black:s={TARGET_WIDTH}x{TARGET_HEIGHT}:r={FPS}[base_canvas];"
         f"[base_canvas][video_merged]overlay=0:{VIDEO_START_Y}[canvas_with_video];"
-        # 5. 그 위에 1080x1920 헤더 및 자막 오버레이 합성
+        # 5. 그 위에 1080x1920 인스타 Safe Zone 최적화 헤더 및 자막 오버레이 합성
         "[canvas_with_video][1:v]overlay=0:0[v_out]"
     )
 
@@ -49,11 +50,16 @@ def render_reels(
         "-map", "[v_out]",
         "-map", "0:a?",
         "-c:v", "libx264",
+        "-profile:v", "high",
+        "-level", "4.1",
         "-preset", "veryfast",
         "-crf", "20",
+        "-r", "30",
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
         "-b:a", "192k",
+        "-ar", "44100",
+        "-movflags", "+faststart",
         "-shortest",
         output_path
     ]
