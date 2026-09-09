@@ -6,8 +6,9 @@ from config import TARGET_WIDTH, TARGET_HEIGHT, FPS, OUTPUT_DIR
 def render_reels(
     input_video_path: str,
     overlay_image_path: str,
-    caption_items: list = None,
-    output_filename: str = None
+    caption_items: list[dict] = None,
+    output_filename: str = None,
+    sfx_events: list[dict] = None
 ) -> str:
     """
     유튜브 랭킹 숏폼 스타일 및 인스타그램 릴스 최적화 화면으로 렌더링합니다:
@@ -92,45 +93,47 @@ def render_reels(
     sfx_count = 0
     sfx_mix_tags = []
 
-    if caption_items:
+    # sfx_events가 전달된 경우 독립된 중요한 순간 타임라인 사용, 없으면 caption_items 참조
+    target_sfx_list = []
+    if sfx_events:
+        for ev in sfx_events:
+            target_sfx_list.append({
+                "time": ev.get("time", 0.0),
+                "sfx": ev.get("sfx", "pop"),
+                "vol": ev.get("vol", 2.8)
+            })
+    elif caption_items:
         for cap in caption_items:
-            sfx_name = cap.get('sfx')
-            if not sfx_name:
-                continue
-            sfx_file = SFX_DIR / f"{sfx_name}.wav"
-            if not sfx_file.exists():
-                sfx_file = SFX_DIR / "pop.wav"
+            if cap.get('sfx'):
+                target_sfx_list.append({
+                    "time": cap.get('start', 0.0),
+                    "sfx": cap.get('sfx'),
+                    "vol": 2.8
+                })
 
-            if sfx_file.exists():
-                cmd_inputs.extend(["-i", str(sfx_file)])
-                sfx_tag = f"a_sfx_{sfx_count}"
-                delay_ms = int(cap.get('start', 0.0) * 1000)
-                # 효과음 종류별 고성능 타격감 볼륨 매핑 (원음에 묻히지 않는 확실한 임팩트)
-                sfx_vol_map = {
-                    "camera": 3.0,
-                    "whoosh": 2.8,
-                    "pop": 2.8,
-                    "bonk": 3.0,
-                    "ding": 2.8,
-                    "boing": 2.8,
-                    "scratch": 2.6,
-                    "buzzer": 2.6,
-                    "glitch": 2.6,
-                    "boom": 2.5,
-                }
-                vol = sfx_vol_map.get(sfx_name, 2.6)
-                audio_filters.append(
-                    f"[{current_input_idx}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
-                    f"adelay={delay_ms}|{delay_ms},volume={vol}[{sfx_tag}]"
-                )
+    for item in target_sfx_list:
+        sfx_name = item.get('sfx', 'pop')
+        sfx_file = SFX_DIR / f"{sfx_name}.wav"
+        if not sfx_file.exists():
+            sfx_file = SFX_DIR / "pop.wav"
 
-                sfx_mix_tags.append(f"[{sfx_tag}]")
-                current_input_idx += 1
-                sfx_count += 1
+        if sfx_file.exists():
+            cmd_inputs.extend(["-i", str(sfx_file)])
+            sfx_tag = f"a_sfx_{sfx_count}"
+            delay_ms = int(item.get('time', 0.0) * 1000)
+            vol = float(item.get('vol', 2.8))
+            audio_filters.append(
+                f"[{current_input_idx}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
+                f"adelay={delay_ms}|{delay_ms},volume={vol}[{sfx_tag}]"
+            )
+
+            sfx_mix_tags.append(f"[{sfx_tag}]")
+            current_input_idx += 1
+            sfx_count += 1
 
     if sfx_count > 0:
-        # 원본 오디오를 0.70으로 정돈하여 중요한 순간 효과음이 시원하게 귀에 꽂히도록 믹싱
-        audio_filters.insert(0, "[0:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,volume=0.70[a_base]")
+        # 원본 오디오를 0.65로 약간 낮추어 하이라이트/피크 효과음이 시원하게 꽂히도록 믹싱
+        audio_filters.insert(0, "[0:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,volume=0.65[a_base]")
         inputs_str = "[a_base]" + "".join(sfx_mix_tags)
         audio_filters.append(f"{inputs_str}amix=inputs={sfx_count+1}:duration=first:dropout_transition=0,volume=1.5[a_out]")
         map_audio = "[a_out]"

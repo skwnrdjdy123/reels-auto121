@@ -64,11 +64,18 @@ def create_reels_pipeline(
     )
 
     # 3. 비디오 컷 및 오디오 피크(웃음/타격/고함) 기반 고성능 스마트 자막 & 효과음 동기화
-    scene_captions = generate_adaptive_smart_captions(
+    adaptive_result = generate_adaptive_smart_captions(
         video_path=raw_video_path,
         title=video_info['title'],
         duration=duration
     )
+    if isinstance(adaptive_result, dict):
+        scene_captions = adaptive_result.get("captions", [])
+        sfx_events = adaptive_result.get("sfx_events", [])
+    else:
+        scene_captions = adaptive_result
+        sfx_events = []
+
     caption_items = []
     for idx, sc in enumerate(scene_captions):
         cap_img_path = str(TEMP_DIR / f"caption_{video_info['id']}_{idx}.png")
@@ -77,17 +84,17 @@ def create_reels_pipeline(
             'image_path': cap_img_path,
             'start': sc['start'],
             'end': sc['end'],
-            'text': sc['text'],
-            'sfx': sc.get('sfx')
+            'text': sc['text']
         })
-        print(f"   - 장면 {idx+1} ({sc['start']}s ~ {sc['end']}s, SFX: {sc.get('sfx')}): \"{sc['text']}\"")
+        print(f"   - 자막 {idx+1} ({sc['start']:>4.1f}s ~ {sc['end']:>4.1f}s): \"{sc['text']}\"")
 
     # 4. FFmpeg 릴스 렌더링
-    print("\n[3/3] FFmpeg 다중 장면 자막 릴스 렌더링 중...")
+    print("\n[3/3] FFmpeg 상황 맞춤 자막 & 정밀 효과음 릴스 렌더링 중...")
     output_path = render_reels(
         input_video_path=raw_video_path,
         overlay_image_path=header_overlay_path,
         caption_items=caption_items,
+        sfx_events=sfx_events,
         output_filename=f"ranking_reels_{video_info['id']}.mp4"
     )
 

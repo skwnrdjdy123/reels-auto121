@@ -209,20 +209,19 @@ def generate_korean_hook(english_title: str) -> tuple[str, str, str, str]:
     clean_title = clean_title.replace('|', '').replace('~', '').strip()
     title_lower = clean_title.lower()
 
-    # 번역
-    try:
-        translator = GoogleTranslator(source='auto', target='ko')
-        translated = translator.translate(clean_title)
-    except Exception:
-        translated = clean_title
+    # 번역 및 실제 상황 키워드 추출
+    from caption_engine import clean_and_translate_title
+    translated, action_ctx = clean_and_translate_title(english_title)
 
     # 1. 실제 다중 장면 랭킹/모음집 영상인지 확인 (TOP N 또는 compilation 키워드)
     import re
     top_num_match = re.search(r'(?:top|ranking)\s*(\d+)', title_lower)
     is_compilation = bool(top_num_match) or any(w in title_lower for w in ["compilation", "fails compilation", "top 5", "top 6", "top 10", "ranking", "moments compilation"])
 
-    # 2. 주제어 식별
-    if any(k in title_lower for k in ["cat", "kitten", "고양이"]):
+    # 2. 구체적 상황 키워드 기반 주제어 결정
+    if action_ctx and 2 <= len(action_ctx) <= 12 and not any(w in action_ctx for w in ["모음", "베스트", "유튜브"]):
+        topic = action_ctx
+    elif any(k in title_lower for k in ["cat", "kitten", "고양이"]):
         topic = "웃긴 고양이"
     elif any(k in title_lower for k in ["dog", "puppy", "강아지", "개"]):
         topic = "웃긴 강아지"
@@ -235,7 +234,7 @@ def generate_korean_hook(english_title: str) -> tuple[str, str, str, str]:
     elif any(k in title_lower for k in ["fail", "regret", "clumsy", "실수"]):
         topic = "순간포착 레전드"
     else:
-        topic = "해외 바이럴"
+        topic = action_ctx if (action_ctx and len(action_ctx) <= 10) else "해외 바이럴"
 
     # 3. 모음집 vs 단일 클립 분기 처리 (사기 및 괴리감 방지!)
     if is_compilation:
@@ -244,8 +243,12 @@ def generate_korean_hook(english_title: str) -> tuple[str, str, str, str]:
         line2_text = f"모먼트 랭킹 {top_num}"
         sub_text = "(다들 몇 번이 제일 웃김? ㅋㅋㅋ)"
     else:
-        # 단일 클립 영상인 경우: 랭킹 TOP5를 붙이지 않고 단일 상황에 100% 맞는 고몰입 훅 사용
-        line1_text = f"역대급 화제 된 {topic}"
+        # 단일 클립 영상인 경우: 영상의 실제 상황을 담은 고몰입 훅 사용
+        if action_ctx and len(action_ctx) <= 10:
+            line1_text = f"해외에서 화제 된 [{action_ctx}]"
+        else:
+            line1_text = f"역대급 화제 된 {topic}"
+
         punchlines = [
             "실제 반응 레전드 모먼트",
             "보고도 안 믿기는 실제 상황",
