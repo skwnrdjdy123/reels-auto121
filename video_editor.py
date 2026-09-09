@@ -137,7 +137,9 @@ def render_reels(
         "-profile:v", "high",
         "-level", "4.1",
         "-preset", "veryfast",
-        "-crf", "20",
+        "-crf", "23",
+        "-maxrate", "3500k",
+        "-bufsize", "7000k",
         "-r", "30",
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
@@ -146,6 +148,7 @@ def render_reels(
         "-movflags", "+faststart",
         "-shortest",
         output_path
+
     ]
 
     print(f"FFmpeg 랭킹 스타일 및 효과음 믹싱 릴스 렌더링 시작: {output_path}")

@@ -200,6 +200,12 @@ async def process_auto_reels(channel: discord.TextChannel):
             filename = Path(reels_path).name
             file_size_mb = os.path.getsize(reels_path) / (1024 * 1024)
 
+            if file_size_mb > 10:
+                print(f"영상 용량({file_size_mb:.1f}MB)이 디스코드 제한(10MB)을 초과하여 다음 영상으로 자동 전환합니다.")
+                save_processed_id(found['id'])
+                continue
+
+
             LAST_PROCESSED_VIDEO[channel.id] = {
                 'url': found['url'],
                 'id': found['id'],
