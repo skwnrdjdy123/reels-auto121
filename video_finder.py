@@ -125,11 +125,16 @@ def find_viral_video(min_views: int = 300000) -> dict:
                 if not v_id or v_id in processed_ids:
                     continue
 
+                # 유튜브 비디오 ID는 정확히 11자의 영문, 숫자, -, _ 로만 이루어져야 함
+                import re
+                if not re.match(r'^[a-zA-Z0-9_-]{11}$', str(v_id)):
+                    continue
+
                 v_title = entry.get('title', '')
                 title_lower = v_title.lower()
 
-                # 1. 라이브 방송, 24시간 스트리밍 제외
-                if any(bad in title_lower for bad in ["live", "24/7", "stream", "broadcast"]):
+                # 1. 라이브 방송, 24시간 스트리밍, 컴필레이션 제외
+                if any(bad in title_lower for bad in ["live", "24/7", "stream", "broadcast", "compilation"]):
                     continue
 
                 # 2. 재생시간 필터 (8초 ~ 45초 사이의 임팩트 있는 단일 숏폼만)
@@ -138,7 +143,7 @@ def find_viral_video(min_views: int = 300000) -> dict:
                     continue
 
                 v_url = f"https://www.youtube.com/shorts/{v_id}"
-                print(f"🎯 검증된 대세 밈 영상 발견! | 제목: {v_title}")
+                print(f"🎯 검증된 대세 밈 영상 발견! | ID: {v_id} | 제목: {v_title}")
                 line1, line2, sub, caption = generate_korean_hook(v_title)
 
                 return {

@@ -87,11 +87,12 @@ async def process_auto_reels(channel: discord.TextChannel):
     loop = asyncio.get_event_loop()
 
     for attempt in range(5):
+        found = None
         try:
             found = await loop.run_in_executor(None, find_viral_video)
 
             await status_msg.edit(
-                content=f"🎯 **대세 바이럴 영상 발견!**\n- 제목: **{found['orig_title']}**\n- 상단 헤더: **{found['line1']} {found['line2']}**\n- 자막: **{found['caption']}**\n\n⚙️ 9:16 랭킹 릴스로 자동 편집 중입니다... (약 15초)"
+                content=f"🎯 **대세 바이럴 영상 발견!** (시도 {attempt+1})\n- 제목: **{found['orig_title']}**\n- 상단 헤더: **{found['line1']} {found['line2']}**\n- 자막: **{found['caption']}**\n\n⚙️ 9:16 랭킹 릴스로 자동 편집 중입니다... (약 15초)"
             )
 
             reels_path = await loop.run_in_executor(
@@ -125,8 +126,10 @@ async def process_auto_reels(channel: discord.TextChannel):
 
         except Exception as e:
             err_text = str(e)
+            if found and 'id' in found:
+                save_processed_id(found['id'])
             print(f"재시도 {attempt+1}/5 - 영상 오류 ({err_text[:80]}), 다음 영상 자동 탐색...")
-            await status_msg.edit(content=f"🔄 다른 인기 영상을 탐색 중입니다... (시도 {attempt+1}/5)")
+            await status_msg.edit(content=f"🔄 오류 영상 자동 건너뜀 및 다음 인기 영상 탐색 중... (시도 {attempt+1}/5)")
             await asyncio.sleep(1)
 
     await status_msg.edit(content="⚠️ 인기 영상을 다운로드하는 중 일시적인 오류가 발생했습니다. 잠시 후 `!탐색`을 다시 시도해 주세요.")
